@@ -247,12 +247,7 @@ function App() {
           </td>
         </tr>
         <tr>
-          <td className="footer">
-            Powered by{" "}
-            <a href="https://nushud.com" target="_blank" rel="noopener noreferrer">
-              NUSHUD.com
-            </a>
-          </td>
+          <td className="footer">© 2026 NUSHUD Reader. All rights reserved.</td>
         </tr>
       </tbody>
     </table>
