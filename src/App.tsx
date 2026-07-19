@@ -122,7 +122,7 @@ function App() {
       <tbody>
         <tr>
           <td className="banner">
-            <h1>NUSHUD Reader</h1>
+            <img src="/logo.png" alt="NUSHUD Reader" className="site-logo" />
             <p>Read any Arabic text and click any word to see its meaning — free.</p>
           </td>
         </tr>

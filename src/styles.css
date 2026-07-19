@@ -38,21 +38,24 @@ table {
 }
 
 .banner {
-  background: #003366;
-  color: #ffffff;
-  padding: 8px 12px;
+  background: #fbf6e8;
+  border-bottom: 1px solid #999999;
+  padding: 10px 12px 6px;
   text-align: center;
 }
 
-.banner h1 {
-  margin: 0;
-  font-size: 18px;
+.site-logo {
+  display: block;
+  margin: 0 auto;
+  max-width: 320px;
+  width: 100%;
+  height: auto;
 }
 
 .banner p {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   font-size: 11px;
-  color: #cddcec;
+  color: #555555;
 }
 
 .nav {
@@ -275,11 +278,11 @@ button:disabled {
   }
 
   .banner {
-    padding: 10px 10px;
+    padding: 10px 10px 6px;
   }
 
-  .banner h1 {
-    font-size: 20px;
+  .site-logo {
+    max-width: 240px;
   }
 
   .banner p {
