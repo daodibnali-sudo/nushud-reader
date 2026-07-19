@@ -63,15 +63,15 @@ table {
   border-bottom: 1px solid #999999;
   padding: 6px 12px;
   font-size: 12px;
-  text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
 }
 
 .nav-button {
-  margin: 0 4px;
-}
-
-a.nav-button {
   display: inline-block;
+  margin: 0;
   font: inherit;
   font-size: 12px;
   background: #ece9d8;
@@ -79,6 +79,7 @@ a.nav-button {
   padding: 3px 12px;
   text-decoration: none;
   color: #000000;
+  cursor: pointer;
 }
 
 .nav-button.current {
@@ -145,6 +146,7 @@ button,
 input[type="submit"] {
   font: inherit;
   font-size: 12px;
+  color: #000000;
   background: #ece9d8;
   border: 2px outset #d4d0c8;
   padding: 3px 12px;
@@ -307,10 +309,11 @@ button:disabled {
   .nav {
     font-size: 14px;
     padding: 8px 10px;
+    gap: 8px;
   }
 
   .nav-button {
-    margin: 0 6px;
+    margin: 0;
     font-size: 15px;
     min-height: 42px;
     padding: 6px 16px;
