@@ -28,6 +28,7 @@ function App() {
   const [selectedPhrase, setSelectedPhrase] = useState<string | null>(null);
   const [phraseTranslation, setPhraseTranslation] = useState<string | null>(null);
   const [isPhraseLoading, setIsPhraseLoading] = useState(false);
+  const [isFullDisplay, setIsFullDisplay] = useState(false);
 
   const [isBusy, setIsBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
@@ -186,7 +187,17 @@ function App() {
 
                 {documentLines.length > 0 && (
                   <>
-                    <table className="two-col">
+                    <div className={isFullDisplay ? "reader-full-display active" : "reader-full-display"}>
+                      <button
+                        type="button"
+                        className="full-display-toggle"
+                        onClick={() => setIsFullDisplay((current) => !current)}
+                        aria-label="Full display read"
+                        title="Full display read"
+                      >
+                        {isFullDisplay ? "✕ Exit full display" : "⛶ Full display read"}
+                      </button>
+                      <table className="two-col">
                       <tbody>
                         <tr>
                           <td>
@@ -240,7 +251,8 @@ function App() {
                           </td>
                         </tr>
                       </tbody>
-                    </table>
+                      </table>
+                    </div>
                     {(selectedToken || selectedPhrase) && (
                       <div className="word-popup-backdrop" onClick={closePopup} />
                     )}
