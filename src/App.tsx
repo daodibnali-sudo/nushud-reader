@@ -263,7 +263,7 @@ function App() {
           </td>
         </tr>
         <tr>
-          <td className="footer">© 2026 NUSHUD Reader. All rights reserved.</td>
+          <td className="footer">© 2026 ArabicWordByWord. All rights reserved.</td>
         </tr>
       </tbody>
     </table>
