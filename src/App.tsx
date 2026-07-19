@@ -169,6 +169,9 @@ function App() {
             >
               My Cards
             </button>
+            <a href="/about" className="nav-button">About</a>
+            <a href="/how-it-works" className="nav-button">How It Works</a>
+            <a href="/faq" className="nav-button">FAQ</a>
           </td>
         </tr>
         <tr>

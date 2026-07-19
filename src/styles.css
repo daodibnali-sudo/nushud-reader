@@ -70,6 +70,17 @@ table {
   margin: 0 4px;
 }
 
+a.nav-button {
+  display: inline-block;
+  font: inherit;
+  font-size: 12px;
+  background: #ece9d8;
+  border: 2px outset #d4d0c8;
+  padding: 3px 12px;
+  text-decoration: none;
+  color: #000000;
+}
+
 .nav-button.current {
   font-weight: bold;
   border-style: inset;
