@@ -272,6 +272,10 @@ button:disabled {
   display: none;
 }
 
+.full-display-toggle {
+  display: none;
+}
+
 @media (max-width: 640px) {
   body {
     font-size: 15px;
@@ -453,10 +457,6 @@ button:disabled {
   .reader-full-display.active .inline-promo {
     display: none;
   }
-}
-
-.full-display-toggle {
-  display: none;
 }
 
 .small {
