@@ -6,7 +6,6 @@ import { WordInfoPanel } from "./components/WordInfoPanel";
 import { PhraseInfoPanel } from "./components/PhraseInfoPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SavedCardsPage } from "./components/SavedCardsPage";
-import { NushudPromo } from "./components/NushudPromo";
 import { getSupabaseClient } from "./lib/supabase/client";
 import { extractFromFile } from "./utils/extractText";
 import { buildDocumentLines } from "./utils/arabicText";
@@ -234,7 +233,6 @@ function App() {
                                 />
                               )}
                             </div>
-                            <NushudPromo />
                           </td>
                         </tr>
                       </tbody>
