@@ -437,3 +437,22 @@ button:disabled {
   color: #555555;
   text-align: center;
 }
+
+.footer-promo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: #000000;
+  margin-bottom: 4px;
+}
+
+.footer-promo-image {
+  width: 32px;
+  height: auto;
+  border: 1px solid #999999;
+}
+
+.footer-copyright {
+  margin: 0;
+}

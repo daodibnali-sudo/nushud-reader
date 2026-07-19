@@ -247,7 +247,13 @@ function App() {
           </td>
         </tr>
         <tr>
-          <td className="footer">© 2026 NUSHUD Reader. All rights reserved.</td>
+          <td className="footer">
+            <a href="https://nushud.com" target="_blank" rel="noopener noreferrer" className="footer-promo">
+              <img src="/nushud-app-preview.jpeg" alt="NUSHUD app" className="footer-promo-image" />
+              <span>Also try NUSHUD — learn Arabic through nasheeds</span>
+            </a>
+            <p className="footer-copyright">© 2026 NUSHUD Reader. All rights reserved.</p>
+          </td>
         </tr>
       </tbody>
     </table>
