@@ -149,8 +149,8 @@ function App() {
       <tbody>
         <tr>
           <td className="banner">
-            <img src="/logo.png" alt="NUSHUD Reader" className="site-logo" />
-            <p>Read any Arabic text and click any word to see its meaning — free.</p>
+            <img src="/logo.png" alt="Arabic Word By Word" className="site-logo" />
+            <p>Read Arabic text word by word — click any word for an instant translation, free.</p>
           </td>
         </tr>
         <tr>
