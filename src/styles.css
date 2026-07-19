@@ -429,46 +429,6 @@ button:disabled {
   color: #555555;
 }
 
-.ad-banner {
-  border: 1px solid #999999;
-  background: #fdf8ea;
-  margin-top: 10px;
-  padding: 6px 8px;
-}
-
-.ad-banner-label {
-  font-size: 10px;
-  color: #888888;
-  margin-bottom: 4px;
-}
-
-.ad-banner-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  color: #000000;
-}
-
-.ad-banner-image {
-  width: 64px;
-  height: auto;
-  border: 1px solid #999999;
-  flex-shrink: 0;
-}
-
-.ad-banner-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
-}
-
-.ad-banner-text span {
-  color: #003366;
-  font-size: 12px;
-}
-
 .footer {
   border-top: 1px solid #999999;
   background: #f1ead6;

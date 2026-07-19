@@ -7,7 +7,6 @@ import { PhraseInfoPanel } from "./components/PhraseInfoPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SavedCardsPage } from "./components/SavedCardsPage";
 import { NushudPromo } from "./components/NushudPromo";
-import { NushudAdBanner } from "./components/NushudAdBanner";
 import { getSupabaseClient } from "./lib/supabase/client";
 import { extractFromFile } from "./utils/extractText";
 import { buildDocumentLines } from "./utils/arabicText";
@@ -22,7 +21,6 @@ function App() {
   const supabase = useMemo(() => getSupabaseClient(), []);
 
   const [view, setView] = useState<View>("read");
-  const [isOnboarding, setIsOnboarding] = useState(true);
   const [fileName, setFileName] = useState("");
   const [documentLines, setDocumentLines] = useState<DocumentLine[]>(() => buildDocumentLines(welcomeText));
   const [language, setLanguage] = useState("en");
@@ -83,7 +81,6 @@ function App() {
 
   const handleFile = useCallback(
     async (file: File) => {
-      setIsOnboarding(false);
       setFileName(file.name);
       setDocumentLines([]);
       setResolvedWords({});
@@ -201,7 +198,6 @@ function App() {
                               onSelectToken={handleSelectToken}
                               onSelectPhrase={handleSelectPhrase}
                             />
-                            {isOnboarding && <NushudAdBanner />}
                           </td>
                           <td className="side">
                             <div className={selectedToken || selectedPhrase ? "word-popup word-popup-open" : "word-popup"}>
