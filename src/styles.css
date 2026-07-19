@@ -438,21 +438,22 @@ button:disabled {
   text-align: center;
 }
 
-.footer-promo {
-  display: inline-flex;
+.inline-promo {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   text-decoration: none;
   color: #000000;
-  margin-bottom: 4px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 5px 8px;
+  border: 1px solid #999999;
+  background: #fdf8ea;
 }
 
-.footer-promo-image {
+.inline-promo-image {
   width: 32px;
   height: auto;
   border: 1px solid #999999;
-}
-
-.footer-copyright {
-  margin: 0;
+  flex-shrink: 0;
 }

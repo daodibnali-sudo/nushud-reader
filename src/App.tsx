@@ -197,6 +197,10 @@ function App() {
                               onSelectToken={handleSelectToken}
                               onSelectPhrase={handleSelectPhrase}
                             />
+                            <a href="https://nushud.com" target="_blank" rel="noopener noreferrer" className="inline-promo">
+                              <img src="/nushud-app-preview.jpeg" alt="NUSHUD app" className="inline-promo-image" />
+                              <span>Also try NUSHUD — learn Arabic through nasheeds</span>
+                            </a>
                           </td>
                           <td className="side">
                             <div className={selectedToken || selectedPhrase ? "word-popup word-popup-open" : "word-popup"}>
@@ -247,13 +251,7 @@ function App() {
           </td>
         </tr>
         <tr>
-          <td className="footer">
-            <a href="https://nushud.com" target="_blank" rel="noopener noreferrer" className="footer-promo">
-              <img src="/nushud-app-preview.jpeg" alt="NUSHUD app" className="footer-promo-image" />
-              <span>Also try NUSHUD — learn Arabic through nasheeds</span>
-            </a>
-            <p className="footer-copyright">© 2026 NUSHUD Reader. All rights reserved.</p>
-          </td>
+          <td className="footer">© 2026 NUSHUD Reader. All rights reserved.</td>
         </tr>
       </tbody>
     </table>
