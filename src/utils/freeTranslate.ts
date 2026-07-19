@@ -13,6 +13,41 @@
 const endpoint = "https://translate.googleapis.com/translate_a/single";
 const maxMeanings = 4;
 
+/**
+ * Translates an arbitrary selected phrase/sentence (not a single dictionary word).
+ * Uses the same endpoint but skips the bilingual-dictionary lookup (`dt=bd`),
+ * since that's meant for single words — a full sentence just wants the plain
+ * sentence-style translation (`dt=t`).
+ */
+export async function translateText(text: string, targetLanguage: string): Promise<string> {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+
+  if (targetLanguage === "ar") {
+    return trimmed;
+  }
+
+  const url = `${endpoint}?client=gtx&sl=ar&tl=${encodeURIComponent(targetLanguage)}&dt=t&q=${encodeURIComponent(trimmed)}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Translation request failed: ${response.status}`);
+  }
+
+  const data: unknown = await response.json();
+  return parseSentence(data) || trimmed;
+}
+
+function parseSentence(data: unknown): string {
+  if (Array.isArray(data) && Array.isArray(data[0])) {
+    return data[0]
+      .map((part) => (Array.isArray(part) && typeof part[0] === "string" ? part[0] : ""))
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
 export async function translateWord(word: string, targetLanguage: string): Promise<string[]> {
   if (!word) return [];
 

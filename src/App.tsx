@@ -3,6 +3,7 @@ import { UploadPanel } from "./components/UploadPanel";
 import { LanguageSelect } from "./components/LanguageSelect";
 import { ClickableArabicText } from "./components/ClickableArabicText";
 import { WordInfoPanel } from "./components/WordInfoPanel";
+import { PhraseInfoPanel } from "./components/PhraseInfoPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SavedCardsPage } from "./components/SavedCardsPage";
 import { NushudPromo } from "./components/NushudPromo";
@@ -11,6 +12,7 @@ import { getSupabaseClient } from "./lib/supabase/client";
 import { extractFromFile } from "./utils/extractText";
 import { buildDocumentLines } from "./utils/arabicText";
 import { analyzeDocumentWords } from "./repositories/wordAnalysisService";
+import { translateText } from "./utils/freeTranslate";
 import { welcomeText } from "./content/welcomeText";
 import type { DocumentLine, ReaderWordEntry, WordToken } from "./types";
 
@@ -26,6 +28,9 @@ function App() {
   const [language, setLanguage] = useState("en");
   const [resolvedWords, setResolvedWords] = useState<Record<string, ReaderWordEntry>>({});
   const [selectedToken, setSelectedToken] = useState<WordToken | null>(null);
+  const [selectedPhrase, setSelectedPhrase] = useState<string | null>(null);
+  const [phraseTranslation, setPhraseTranslation] = useState<string | null>(null);
+  const [isPhraseLoading, setIsPhraseLoading] = useState(false);
 
   const [isBusy, setIsBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
@@ -117,6 +122,31 @@ function App() {
 
   const selectedEntry = selectedToken ? resolvedWords[selectedToken.normalized] ?? null : null;
 
+  const handleSelectToken = useCallback((token: WordToken) => {
+    setSelectedPhrase(null);
+    setSelectedToken(token);
+  }, []);
+
+  const handleSelectPhrase = useCallback(
+    (text: string) => {
+      setSelectedToken(null);
+      setSelectedPhrase(text);
+      setPhraseTranslation(null);
+      setIsPhraseLoading(true);
+
+      translateText(text, language)
+        .then((result) => setPhraseTranslation(result))
+        .catch(() => setPhraseTranslation(null))
+        .finally(() => setIsPhraseLoading(false));
+    },
+    [language],
+  );
+
+  const closePopup = useCallback(() => {
+    setSelectedToken(null);
+    setSelectedPhrase(null);
+  }, []);
+
   return (
     <table className="page" cellPadding={0} cellSpacing={0}>
       <tbody>
@@ -168,43 +198,53 @@ function App() {
                               lines={documentLines}
                               resolvedWords={resolvedWords}
                               selectedTokenId={selectedToken?.id ?? null}
-                              onSelectToken={setSelectedToken}
+                              onSelectToken={handleSelectToken}
+                              onSelectPhrase={handleSelectPhrase}
                             />
                             {isOnboarding && <NushudAdBanner />}
                           </td>
                           <td className="side">
-                            <div className={selectedToken ? "word-popup word-popup-open" : "word-popup"}>
-                              {selectedToken && (
+                            <div className={selectedToken || selectedPhrase ? "word-popup word-popup-open" : "word-popup"}>
+                              {(selectedToken || selectedPhrase) && (
                                 <button
                                   type="button"
                                   className="word-popup-close"
-                                  onClick={() => setSelectedToken(null)}
+                                  onClick={closePopup}
                                   aria-label="Close"
                                   title="Close"
                                 >
                                   ×
                                 </button>
                               )}
-                              <WordInfoPanel
-                                normalizedWord={selectedToken?.normalized ?? null}
-                                word={selectedToken?.raw ?? null}
-                                entry={selectedEntry}
-                                language={language}
-                                isLoading={isBusy}
-                                onSaved={() => {
-                                  if (window.matchMedia("(max-width: 640px)").matches) {
-                                    setSelectedToken(null);
-                                  }
-                                }}
-                              />
+                              {selectedPhrase ? (
+                                <PhraseInfoPanel
+                                  phrase={selectedPhrase}
+                                  translation={phraseTranslation}
+                                  language={language}
+                                  isLoading={isPhraseLoading}
+                                />
+                              ) : (
+                                <WordInfoPanel
+                                  normalizedWord={selectedToken?.normalized ?? null}
+                                  word={selectedToken?.raw ?? null}
+                                  entry={selectedEntry}
+                                  language={language}
+                                  isLoading={isBusy}
+                                  onSaved={() => {
+                                    if (window.matchMedia("(max-width: 640px)").matches) {
+                                      setSelectedToken(null);
+                                    }
+                                  }}
+                                />
+                              )}
                             </div>
                             <NushudPromo />
                           </td>
                         </tr>
                       </tbody>
                     </table>
-                    {selectedToken && (
-                      <div className="word-popup-backdrop" onClick={() => setSelectedToken(null)} />
+                    {(selectedToken || selectedPhrase) && (
+                      <div className="word-popup-backdrop" onClick={closePopup} />
                     )}
                   </>
                 )}
