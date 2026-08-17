@@ -22,12 +22,19 @@ let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = nul
  * reused across uploads in a session so the model is only downloaded once. "whisper-base"
  * is a size/quality compromise for Arabic; a heavier model (e.g. whisper-small) would
  * transcribe more accurately at the cost of a much bigger first-run download.
+ *
+ * dtype is fp32 (not q8/q4) on purpose: onnx-community's quantized decoder export for
+ * this model is missing a required scale tensor for its embedding layer
+ * (TransposeDQWeightsForMatMulNBits fails with "Missing required scale:
+ * model.decoder.embed_tokens.weight_merged_0_scale"), so onnxruntime-web can't even
+ * build a session with it. fp32 uses the standard matmul path instead of that broken
+ * quantized one — bigger download, but it actually works.
  */
 async function getTranscriber(onProgress: (message: string) => void): Promise<AutomaticSpeechRecognitionPipeline> {
   if (!transcriberPromise) {
-    onProgress("Downloading speech-recognition model (first time only, ~80MB)...");
+    onProgress("Downloading speech-recognition model (first time only, ~150MB)...");
     transcriberPromise = import("@huggingface/transformers").then(({ pipeline }) =>
-      pipeline("automatic-speech-recognition", "onnx-community/whisper-base", { dtype: "q8" }),
+      pipeline("automatic-speech-recognition", "onnx-community/whisper-base", { dtype: "fp32" }),
     );
   }
   return transcriberPromise;
