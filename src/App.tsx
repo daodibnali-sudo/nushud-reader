@@ -28,6 +28,10 @@ function isAudioFile(file: File): boolean {
   return file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(file.name);
 }
 
+const minReaderFontSize = 14;
+const maxReaderFontSize = 40;
+const readerFontSizeStep = 2;
+
 type View = "read" | "cards";
 
 function App() {
@@ -60,6 +64,14 @@ function App() {
   const [phraseTranslation, setPhraseTranslation] = useState<string | null>(null);
   const [isPhraseLoading, setIsPhraseLoading] = useState(false);
   const [isFullDisplay, setIsFullDisplay] = useState(false);
+  const [readerFontSize, setReaderFontSize] = useState<number | null>(null);
+
+  const adjustReaderFontSize = useCallback((delta: number) => {
+    setReaderFontSize((current) => {
+      const base = current ?? (window.matchMedia("(max-width: 640px)").matches ? 23 : 19);
+      return Math.min(maxReaderFontSize, Math.max(minReaderFontSize, base + delta));
+    });
+  }, []);
 
   const [isBusy, setIsBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
@@ -325,16 +337,47 @@ function App() {
 
                 {documentLines.length > 0 && (
                   <>
-                    <div className={isFullDisplay ? "reader-full-display active" : "reader-full-display"}>
-                      <button
-                        type="button"
-                        className="full-display-toggle"
-                        onClick={() => setIsFullDisplay((current) => !current)}
-                        aria-label="Full display read"
-                        title="Full display read"
-                      >
-                        {isFullDisplay ? "✕ Exit full display" : "⛶ Full display read"}
-                      </button>
+                    <div
+                      className={isFullDisplay ? "reader-full-display active" : "reader-full-display"}
+                      style={
+                        readerFontSize !== null
+                          ? ({ "--reader-font-size": `${readerFontSize}px` } as React.CSSProperties)
+                          : undefined
+                      }
+                    >
+                      <div className="reader-focus-bar">
+                        <button
+                          type="button"
+                          className="full-display-toggle"
+                          onClick={() => setIsFullDisplay((current) => !current)}
+                          aria-label="Full display read"
+                          title="Full display read"
+                        >
+                          {isFullDisplay ? "✕ Exit full display" : "⛶ Full display read"}
+                        </button>
+                        {isFullDisplay && (
+                          <div className="reader-font-controls">
+                            <button
+                              type="button"
+                              onClick={() => adjustReaderFontSize(-readerFontSizeStep)}
+                              disabled={readerFontSize !== null && readerFontSize <= minReaderFontSize}
+                              aria-label="Decrease text size"
+                              title="Decrease text size"
+                            >
+                              −
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => adjustReaderFontSize(readerFontSizeStep)}
+                              disabled={readerFontSize !== null && readerFontSize >= maxReaderFontSize}
+                              aria-label="Increase text size"
+                              title="Increase text size"
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <table className="two-col">
                       <tbody>
                         <tr>
