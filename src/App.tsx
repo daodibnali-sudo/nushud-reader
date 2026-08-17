@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UploadPanel } from "./components/UploadPanel";
 import { LanguageSelect } from "./components/LanguageSelect";
+import { TranscriptionSettings } from "./components/TranscriptionSettings";
 import { ClickableArabicText } from "./components/ClickableArabicText";
 import { WordInfoPanel } from "./components/WordInfoPanel";
 import { PhraseInfoPanel } from "./components/PhraseInfoPanel";
@@ -10,6 +11,14 @@ import { getSupabaseClient } from "./lib/supabase/client";
 import { extractFromFile } from "./utils/extractText";
 import { buildDocumentLines, buildDocumentLinesFromTranscribedWords } from "./utils/arabicText";
 import { transcribeArabicAudio } from "./utils/transcribeAudio";
+import { transcribeWithElevenLabs } from "./utils/transcribeElevenLabs";
+import {
+  getElevenLabsApiKey,
+  getTranscriptionEngine,
+  setElevenLabsApiKey,
+  setTranscriptionEngine,
+  type TranscriptionEngine,
+} from "./repositories/elevenLabsSettings";
 import { analyzeDocumentWords } from "./repositories/wordAnalysisService";
 import { translateText } from "./utils/freeTranslate";
 import { welcomeText } from "./content/welcomeText";
@@ -61,6 +70,19 @@ function App() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  const [transcriptionEngine, setTranscriptionEngineState] = useState<TranscriptionEngine>(getTranscriptionEngine);
+  const [elevenLabsApiKey, setElevenLabsApiKeyState] = useState<string>(getElevenLabsApiKey);
+
+  const handleEngineChange = useCallback((engine: TranscriptionEngine) => {
+    setTranscriptionEngineState(engine);
+    setTranscriptionEngine(engine);
+  }, []);
+
+  const handleApiKeyChange = useCallback((apiKey: string) => {
+    setElevenLabsApiKeyState(apiKey);
+    setElevenLabsApiKey(apiKey);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -154,7 +176,18 @@ function App() {
       setStatusMessage(`Reading ${file.name}...`);
 
       try {
-        const { words } = await transcribeArabicAudio(file, (message) => setStatusMessage(message));
+        let words;
+        if (transcriptionEngine === "elevenlabs") {
+          const apiKey = elevenLabsApiKey.trim();
+          if (!apiKey) {
+            throw new Error("Paste your ElevenLabs API key in Settings first, or switch the engine back to Free.");
+          }
+          setStatusMessage("Transcribing audio via ElevenLabs...");
+          ({ words } = await transcribeWithElevenLabs(file, apiKey));
+        } else {
+          ({ words } = await transcribeArabicAudio(file, (message) => setStatusMessage(message)));
+        }
+
         const lines = buildDocumentLinesFromTranscribedWords(words);
         setDocumentLines(lines);
         setStatusMessage("Transcribed. Now analyzing words...");
@@ -164,7 +197,7 @@ function App() {
         setIsBusy(false);
       }
     },
-    [language, runAnalysis],
+    [language, runAnalysis, transcriptionEngine, elevenLabsApiKey],
   );
 
   const handleFile = useCallback(
@@ -279,6 +312,13 @@ function App() {
                   <legend>Settings</legend>
                   <LanguageSelect value={language} onChange={handleLanguageChange} disabled={isBusy} />
                 </fieldset>
+                <TranscriptionSettings
+                  engine={transcriptionEngine}
+                  apiKey={elevenLabsApiKey}
+                  onEngineChange={handleEngineChange}
+                  onApiKeyChange={handleApiKeyChange}
+                  disabled={isBusy}
+                />
                 <UploadPanel onFile={handleFile} disabled={isBusy} />
 
                 <StatusBar message={fileName ? `${fileName} — ${statusMessage}` : statusMessage} progress={progress} />

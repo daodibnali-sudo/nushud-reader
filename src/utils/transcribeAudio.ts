@@ -1,15 +1,5 @@
 import type { AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
-
-export type TranscribedWord = {
-  text: string;
-  start: number;
-  end: number;
-};
-
-export type TranscriptionResult = {
-  fullText: string;
-  words: TranscribedWord[];
-};
+import type { TranscribedWord, TranscriptionResult } from "../types";
 
 let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
 

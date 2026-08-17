@@ -1,5 +1,4 @@
-import type { DocumentLine, WordToken } from "../types";
-import type { TranscribedWord } from "./transcribeAudio";
+import type { DocumentLine, TranscribedWord, WordToken } from "../types";
 
 // Written with explicit \u escapes (not literal glyphs) so the range order can't get
 // silently scrambled by an editor/tool round-trip — that exact bug once made every

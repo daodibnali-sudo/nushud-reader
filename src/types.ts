@@ -57,3 +57,14 @@ export type ExtractionResult = {
   pages: ExtractionPageResult[];
   usedOcrPageCount: number;
 };
+
+export type TranscribedWord = {
+  text: string;
+  start: number;
+  end: number;
+};
+
+export type TranscriptionResult = {
+  fullText: string;
+  words: TranscribedWord[];
+};
