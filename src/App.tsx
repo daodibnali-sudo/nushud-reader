@@ -172,6 +172,14 @@ function App() {
             <a href="/about" className="nav-button">About</a>
             <a href="/how-it-works" className="nav-button">How It Works</a>
             <a href="/faq" className="nav-button">FAQ</a>
+            <a
+              href="https://buy.stripe.com/9B63cufAI6OcgEq7IJ8ww00"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="nav-button"
+            >
+              ♥ Support this project
+            </a>
           </td>
         </tr>
         <tr>
@@ -266,7 +274,12 @@ function App() {
           </td>
         </tr>
         <tr>
-          <td className="footer">© 2026 ArabicWordByWord. All rights reserved.</td>
+          <td className="footer">
+            © 2026 ArabicWordByWord. All rights reserved. ·{" "}
+            <a href="https://buy.stripe.com/9B63cufAI6OcgEq7IJ8ww00" target="_blank" rel="noopener noreferrer">
+              Support this project
+            </a>
+          </td>
         </tr>
       </tbody>
     </table>
