@@ -23,18 +23,20 @@ let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = nul
  * is a size/quality compromise for Arabic; a heavier model (e.g. whisper-small) would
  * transcribe more accurately at the cost of a much bigger first-run download.
  *
- * dtype is fp32 (not q8/q4) on purpose: onnx-community's quantized decoder export for
- * this model is missing a required scale tensor for its embedding layer
- * (TransposeDQWeightsForMatMulNBits fails with "Missing required scale:
- * model.decoder.embed_tokens.weight_merged_0_scale"), so onnxruntime-web can't even
- * build a session with it. fp32 uses the standard matmul path instead of that broken
- * quantized one — bigger download, but it actually works.
+ * Model is Xenova/whisper-base specifically, not onnx-community/whisper-base — the
+ * onnx-community export's decoder graph doesn't output cross-attentions at all
+ * ("Model outputs must contain cross attentions to extract timestamps... not exported
+ * with output_attentions=True"), which word-level timestamps need for the DTW
+ * time-alignment step. Xenova/whisper-base is the original, more complete conversion
+ * (it's what Hugging Face's own official word-timestamps demo is built on) and also
+ * doesn't have the missing-scale-tensor bug onnx-community's quantized export had, so
+ * fp32 is no longer required here either — the default (quantized) weights work fine.
  */
 async function getTranscriber(onProgress: (message: string) => void): Promise<AutomaticSpeechRecognitionPipeline> {
   if (!transcriberPromise) {
-    onProgress("Downloading speech-recognition model (first time only, ~150MB)...");
+    onProgress("Downloading speech-recognition model (first time only, ~80MB)...");
     transcriberPromise = import("@huggingface/transformers").then(({ pipeline }) =>
-      pipeline("automatic-speech-recognition", "onnx-community/whisper-base", { dtype: "fp32" }),
+      pipeline("automatic-speech-recognition", "Xenova/whisper-base"),
     );
   }
   return transcriberPromise;
