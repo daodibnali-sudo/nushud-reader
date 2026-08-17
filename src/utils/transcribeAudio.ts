@@ -28,15 +28,19 @@ let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = nul
  * ("Model outputs must contain cross attentions to extract timestamps... not exported
  * with output_attentions=True"), which word-level timestamps need for the DTW
  * time-alignment step. Xenova/whisper-base is the original, more complete conversion
- * (it's what Hugging Face's own official word-timestamps demo is built on) and also
- * doesn't have the missing-scale-tensor bug onnx-community's quantized export had, so
- * fp32 is no longer required here either — the default (quantized) weights work fine.
+ * (it's what Hugging Face's own official word-timestamps demo is built on).
+ *
+ * dtype is forced to fp32: Xenova/whisper-base's default (quantized) decoder has the
+ * *same* missing-scale-tensor bug onnx-community's quantized export had
+ * (TransposeDQWeightsForMatMulNBits fails on model.decoder.embed_tokens.weight_merged_0_scale)
+ * — this turned out to be a quantized-ONNX-export problem in general, not specific to
+ * one repo. fp32 avoids that broken matmul path in both.
  */
 async function getTranscriber(onProgress: (message: string) => void): Promise<AutomaticSpeechRecognitionPipeline> {
   if (!transcriberPromise) {
-    onProgress("Downloading speech-recognition model (first time only, ~80MB)...");
+    onProgress("Downloading speech-recognition model (first time only, ~150MB)...");
     transcriberPromise = import("@huggingface/transformers").then(({ pipeline }) =>
-      pipeline("automatic-speech-recognition", "Xenova/whisper-base"),
+      pipeline("automatic-speech-recognition", "Xenova/whisper-base", { dtype: "fp32" }),
     );
   }
   return transcriberPromise;
