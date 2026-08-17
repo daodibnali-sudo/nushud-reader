@@ -30,7 +30,7 @@ export function UploadPanel({ onFile, disabled }: UploadPanelProps) {
         <input
           id="file-input"
           type="file"
-          accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*,audio/*"
+          accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*,audio/*,video/*"
           disabled={disabled}
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -40,8 +40,9 @@ export function UploadPanel({ onFile, disabled }: UploadPanelProps) {
         />
       </div>
       <p className="small">
-        .txt, .pdf, .docx, an image, or an audio file — drag a file here or choose one. Scanned pages are OCR'd
-        automatically; audio is transcribed automatically so you can read along and tap any word while it plays.
+        .txt, .pdf, .docx, an image, an audio file, or a video — drag a file here or choose one. Scanned pages are
+        OCR'd automatically; audio/video is transcribed automatically so you can read along and tap any word while
+        it plays. Video shows the transcript as tappable subtitles, one line at a time.
       </p>
     </fieldset>
   );

@@ -272,6 +272,31 @@ button:disabled {
   margin-bottom: 10px;
 }
 
+.video-player {
+  width: 100%;
+  max-height: 60vh;
+  background: #000000;
+  margin-bottom: 10px;
+}
+
+/* Video mode: one subtitle line at a time instead of the full document, styled bigger
+   and centered like a caption rather than a normal reading paragraph. */
+.subtitle-block {
+  min-height: 3.5em;
+  padding: 10px;
+  border: 1px solid #999999;
+  background: #fdf8ea;
+  text-align: center;
+}
+
+.subtitle-block .reader-box {
+  font-size: 1.3em;
+}
+
+.subtitle-block .arabic-line {
+  margin: 0;
+}
+
 .arabic-token-plain {
   color: #000000;
 }
