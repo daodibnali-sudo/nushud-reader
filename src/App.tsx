@@ -202,7 +202,18 @@ function App() {
         setStatusMessage("Transcribed. Now analyzing words...");
         await runAnalysis(lines, language);
       } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : `Could not transcribe that ${isVideo ? "video" : "audio"}.`);
+        const rawMessage = error instanceof Error ? error.message : "";
+        const isDecodeFailure = /decod/i.test(rawMessage);
+
+        if (isDecodeFailure && transcriptionEngine === "free") {
+          setStatusMessage(
+            "This browser couldn't decode that file's audio track (common with .mov screen recordings). " +
+              "Try switching to ElevenLabs in Settings — it handles video/audio server-side and isn't limited " +
+              "by what the browser itself can decode.",
+          );
+        } else {
+          setStatusMessage(rawMessage || `Could not transcribe that ${isVideo ? "video" : "audio"}.`);
+        }
         setIsBusy(false);
       }
     },
