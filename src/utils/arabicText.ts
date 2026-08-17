@@ -1,4 +1,4 @@
-import type { DocumentLine, WordToken } from "../types";
+import type { DocumentLine, TranscribedWord, WordToken } from "../types";
 
 // Written with explicit \u escapes (not literal glyphs) so the range order can't get
 // silently scrambled by an editor/tool round-trip — that exact bug once made every
@@ -63,6 +63,45 @@ export function buildDocumentLines(fullText: string): DocumentLine[] {
 
     return { lineIndex, tokens };
   });
+}
+
+const sentenceEndRegex = /[.؟!۔:]$/;
+const maxWordsPerTranscribedLine = 12;
+
+/**
+ * Whisper's word-level chunks arrive as one flat timeline with no line breaks, so lines
+ * are synthesized here — break on Arabic/Latin sentence-ending punctuation, or after
+ * maxWordsPerTranscribedLine words, whichever comes first, purely so the reader doesn't
+ * render one giant unbroken paragraph. start/end (seconds) are carried onto each token
+ * so playback can highlight the word currently being spoken.
+ */
+export function buildDocumentLinesFromTranscribedWords(words: TranscribedWord[]): DocumentLine[] {
+  const lines: DocumentLine[] = [];
+  let currentTokens: WordToken[] = [];
+  let lineIndex = 0;
+  let tokenId = 0;
+
+  words.forEach((word, index) => {
+    tokenId += 1;
+    currentTokens.push({
+      id: `a${tokenId}`,
+      raw: word.text,
+      normalized: normalizeArabicWord(word.text),
+      lineIndex,
+      tokenIndex: currentTokens.length,
+      start: word.start,
+      end: word.end,
+    });
+
+    const isLastWord = index === words.length - 1;
+    if (isLastWord || sentenceEndRegex.test(word.text) || currentTokens.length >= maxWordsPerTranscribedLine) {
+      lines.push({ lineIndex, tokens: currentTokens });
+      lineIndex += 1;
+      currentTokens = [];
+    }
+  });
+
+  return lines;
 }
 
 export function uniqueNormalizedWords(lines: DocumentLine[]): string[] {

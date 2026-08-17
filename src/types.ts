@@ -31,6 +31,9 @@ export type WordToken = {
   normalized: string;
   lineIndex: number;
   tokenIndex: number;
+  /** Seconds into the source audio — only set for a transcribed-audio document, used to highlight the word being spoken during playback. */
+  start?: number;
+  end?: number;
 };
 
 export type DocumentLine = {
@@ -53,4 +56,15 @@ export type ExtractionResult = {
   fullText: string;
   pages: ExtractionPageResult[];
   usedOcrPageCount: number;
+};
+
+export type TranscribedWord = {
+  text: string;
+  start: number;
+  end: number;
+};
+
+export type TranscriptionResult = {
+  fullText: string;
+  words: TranscribedWord[];
 };

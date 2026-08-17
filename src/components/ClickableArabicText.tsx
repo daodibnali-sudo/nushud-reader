@@ -5,6 +5,7 @@ type ClickableArabicTextProps = {
   lines: DocumentLine[];
   resolvedWords: Record<string, ReaderWordEntry>;
   selectedTokenId: string | null;
+  activeTokenId?: string | null;
   onSelectToken: (token: WordToken) => void;
   onSelectPhrase: (text: string) => void;
 };
@@ -13,6 +14,7 @@ export function ClickableArabicText({
   lines,
   resolvedWords,
   selectedTokenId,
+  activeTokenId = null,
   onSelectToken,
   onSelectPhrase,
 }: ClickableArabicTextProps) {
@@ -61,7 +63,13 @@ export function ClickableArabicText({
 
               const isResolved = Boolean(resolvedWords[token.normalized]);
               const isSelected = token.id === selectedTokenId;
-              const className = ["arabic-token", isResolved ? "is-known" : "", isSelected ? "is-selected" : ""]
+              const isSpeaking = token.id === activeTokenId;
+              const className = [
+                "arabic-token",
+                isResolved ? "is-known" : "",
+                isSelected ? "is-selected" : "",
+                isSpeaking ? "is-speaking" : "",
+              ]
                 .filter(Boolean)
                 .join(" ");
 

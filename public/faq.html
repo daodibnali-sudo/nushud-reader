@@ -39,7 +39,23 @@
             "name": "What file types can I upload?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Plain text files (.txt), PDFs, Word documents (.docx), and images (photos or scans of a page). Scanned or photographed pages are automatically converted to text before translation."
+              "text": "Plain text files (.txt), PDFs, Word documents (.docx), images (photos or scans of a page), and audio files. Scanned or photographed pages are automatically converted to text before translation, and audio is automatically transcribed."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I upload audio instead of text?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Upload an audio file the same way as a document and it's transcribed automatically, with the word currently being spoken highlighted as it plays, and tapping any word both shows its translation and jumps playback there."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is the audio transcription free, and what is the ElevenLabs option?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The default transcription engine is free and runs in your own browser, with no account or payment needed. For higher accuracy, you can switch to ElevenLabs in Settings and paste your own ElevenLabs API key - transcription then runs on ElevenLabs directly from your browser, billed to your own ElevenLabs account at their normal rate. This site never sees your key and takes no cut."
             }
           },
           {
@@ -87,7 +103,7 @@
             "name": "Does it work on my phone?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes, the site is fully responsive, and on phones you can tap \"Full display read\" to expand the reading area to fill your entire screen."
+              "text": "Yes, the site is fully responsive. On phone or desktop, tap \"Full display read\" to expand the reading area to fill your entire screen, with buttons to shrink or enlarge the Arabic text."
             }
           }
         ]
@@ -121,7 +137,13 @@
             <p>Yes. Reading, translating, and saving words to My Cards are all completely free, with no account, login, or payment required.</p>
 
             <h2>What file types can I upload?</h2>
-            <p>Plain text files (.txt), PDFs, Word documents (.docx), and images (photos or scans of a page). Scanned or photographed pages are automatically converted to text before translation.</p>
+            <p>Plain text files (.txt), PDFs, Word documents (.docx), images (photos or scans of a page), and audio files. Scanned or photographed pages are automatically converted to text before translation, and audio is automatically transcribed.</p>
+
+            <h2>Can I upload audio instead of text?</h2>
+            <p>Yes. Upload an audio file the same way as a document and it's transcribed automatically, with the word currently being spoken highlighted as it plays, and tapping any word both shows its translation and jumps playback there.</p>
+
+            <h2>Is the audio transcription free, and what is the ElevenLabs option?</h2>
+            <p>The default transcription engine is free and runs in your own browser, with no account or payment needed. For higher accuracy, you can switch to ElevenLabs in Settings and paste your own ElevenLabs API key — transcription then runs on ElevenLabs directly from your browser, billed to your own ElevenLabs account at their normal rate. This site never sees your key and takes no cut.</p>
 
             <h2>Does it work with Arabic text that has harakat (diacritics)?</h2>
             <p>Yes, both typed text and text recognized from scanned images or photos can include harakat. Recognition accuracy on harakat depends on image quality — clean, high-resolution scans work best.</p>
@@ -139,7 +161,7 @@
             <p>In your browser's local storage, on your own device. They are not uploaded to any account, so they won't follow you to a different browser or device, and clearing your browser data will remove them.</p>
 
             <h2>Does it work on my phone?</h2>
-            <p>Yes, the site is fully responsive, and on phones you can tap "Full display read" to expand the reading area to fill your entire screen.</p>
+            <p>Yes, the site is fully responsive. On phone or desktop, tap "Full display read" to expand the reading area to fill your entire screen, with buttons to shrink or enlarge the Arabic text.</p>
 
             <p class="button-row">
               <a href="/">Try it now — upload a file</a>

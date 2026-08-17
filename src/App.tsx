@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UploadPanel } from "./components/UploadPanel";
 import { LanguageSelect } from "./components/LanguageSelect";
+import { TranscriptionSettings } from "./components/TranscriptionSettings";
 import { ClickableArabicText } from "./components/ClickableArabicText";
 import { WordInfoPanel } from "./components/WordInfoPanel";
 import { PhraseInfoPanel } from "./components/PhraseInfoPanel";
@@ -8,11 +9,28 @@ import { StatusBar } from "./components/StatusBar";
 import { SavedCardsPage } from "./components/SavedCardsPage";
 import { getSupabaseClient } from "./lib/supabase/client";
 import { extractFromFile } from "./utils/extractText";
-import { buildDocumentLines } from "./utils/arabicText";
+import { buildDocumentLines, buildDocumentLinesFromTranscribedWords } from "./utils/arabicText";
+import { transcribeArabicAudio } from "./utils/transcribeAudio";
+import { transcribeWithElevenLabs } from "./utils/transcribeElevenLabs";
+import {
+  getElevenLabsApiKey,
+  getTranscriptionEngine,
+  setElevenLabsApiKey,
+  setTranscriptionEngine,
+  type TranscriptionEngine,
+} from "./repositories/elevenLabsSettings";
 import { analyzeDocumentWords } from "./repositories/wordAnalysisService";
 import { translateText } from "./utils/freeTranslate";
 import { welcomeText } from "./content/welcomeText";
 import type { DocumentLine, ReaderWordEntry, WordToken } from "./types";
+
+function isAudioFile(file: File): boolean {
+  return file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(file.name);
+}
+
+const minReaderFontSize = 14;
+const maxReaderFontSize = 40;
+const readerFontSizeStep = 2;
 
 type View = "read" | "cards";
 
@@ -46,12 +64,43 @@ function App() {
   const [phraseTranslation, setPhraseTranslation] = useState<string | null>(null);
   const [isPhraseLoading, setIsPhraseLoading] = useState(false);
   const [isFullDisplay, setIsFullDisplay] = useState(false);
+  const [readerFontSize, setReaderFontSize] = useState<number | null>(null);
+
+  const adjustReaderFontSize = useCallback((delta: number) => {
+    setReaderFontSize((current) => {
+      const base = current ?? (window.matchMedia("(max-width: 640px)").matches ? 23 : 19);
+      return Math.min(maxReaderFontSize, Math.max(minReaderFontSize, base + delta));
+    });
+  }, []);
 
   const [isBusy, setIsBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
     "This is a live demo — click a word below, or upload your own file to replace it.",
   );
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const [transcriptionEngine, setTranscriptionEngineState] = useState<TranscriptionEngine>(getTranscriptionEngine);
+  const [elevenLabsApiKey, setElevenLabsApiKeyState] = useState<string>(getElevenLabsApiKey);
+
+  const handleEngineChange = useCallback((engine: TranscriptionEngine) => {
+    setTranscriptionEngineState(engine);
+    setTranscriptionEngine(engine);
+  }, []);
+
+  const handleApiKeyChange = useCallback((apiKey: string) => {
+    setElevenLabsApiKeyState(apiKey);
+    setElevenLabsApiKey(apiKey);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+  }, [audioUrl]);
 
   const runAnalysis = useCallback(async (lines: DocumentLine[], targetLanguage: string) => {
     setIsBusy(true);
@@ -96,12 +145,14 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFile = useCallback(
+  const handleTextFile = useCallback(
     async (file: File) => {
       setFileName(file.name);
       setDocumentLines([]);
       setResolvedWords({});
       setSelectedToken(null);
+      setActiveTokenId(null);
+      setAudioUrl(null);
       setIsBusy(true);
       setProgress(null);
       setStatusMessage(`Reading ${file.name}...`);
@@ -124,6 +175,67 @@ function App() {
     [language, runAnalysis],
   );
 
+  const handleAudioFile = useCallback(
+    async (file: File) => {
+      setFileName(file.name);
+      setDocumentLines([]);
+      setResolvedWords({});
+      setSelectedToken(null);
+      setActiveTokenId(null);
+      setAudioUrl(URL.createObjectURL(file));
+      setIsBusy(true);
+      setProgress(null);
+      setStatusMessage(`Reading ${file.name}...`);
+
+      try {
+        let words;
+        if (transcriptionEngine === "elevenlabs") {
+          const apiKey = elevenLabsApiKey.trim();
+          if (!apiKey) {
+            throw new Error("Paste your ElevenLabs API key in Settings first, or switch the engine back to Free.");
+          }
+          setStatusMessage("Transcribing audio via ElevenLabs...");
+          ({ words } = await transcribeWithElevenLabs(file, apiKey));
+        } else {
+          ({ words } = await transcribeArabicAudio(file, (message) => setStatusMessage(message)));
+        }
+
+        const lines = buildDocumentLinesFromTranscribedWords(words);
+        setDocumentLines(lines);
+        setStatusMessage("Transcribed. Now analyzing words...");
+        await runAnalysis(lines, language);
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : "Could not transcribe that audio.");
+        setIsBusy(false);
+      }
+    },
+    [language, runAnalysis, transcriptionEngine, elevenLabsApiKey],
+  );
+
+  const handleFile = useCallback(
+    (file: File) => {
+      void (isAudioFile(file) ? handleAudioFile(file) : handleTextFile(file));
+    },
+    [handleAudioFile, handleTextFile],
+  );
+
+  const handleAudioTimeUpdate = useCallback(() => {
+    const currentTime = audioRef.current?.currentTime;
+    if (currentTime === undefined) return;
+
+    let found: string | null = null;
+    outer: for (const line of documentLines) {
+      for (const token of line.tokens) {
+        if (token.start === undefined || token.end === undefined) continue;
+        if (currentTime >= token.start && currentTime < token.end) {
+          found = token.id;
+          break outer;
+        }
+      }
+    }
+    setActiveTokenId(found);
+  }, [documentLines]);
+
   const handleLanguageChange = useCallback(
     (nextLanguage: string) => {
       setLanguage(nextLanguage);
@@ -139,6 +251,9 @@ function App() {
   const handleSelectToken = useCallback((token: WordToken) => {
     setSelectedPhrase(null);
     setSelectedToken(token);
+    if (token.start !== undefined && audioRef.current) {
+      audioRef.current.currentTime = token.start;
+    }
   }, []);
 
   const handleSelectPhrase = useCallback(
@@ -209,30 +324,78 @@ function App() {
                   <legend>Settings</legend>
                   <LanguageSelect value={language} onChange={handleLanguageChange} disabled={isBusy} />
                 </fieldset>
+                <TranscriptionSettings
+                  engine={transcriptionEngine}
+                  apiKey={elevenLabsApiKey}
+                  onEngineChange={handleEngineChange}
+                  onApiKeyChange={handleApiKeyChange}
+                  disabled={isBusy}
+                />
                 <UploadPanel onFile={handleFile} disabled={isBusy} />
 
                 <StatusBar message={fileName ? `${fileName} — ${statusMessage}` : statusMessage} progress={progress} />
 
                 {documentLines.length > 0 && (
                   <>
-                    <div className={isFullDisplay ? "reader-full-display active" : "reader-full-display"}>
-                      <button
-                        type="button"
-                        className="full-display-toggle"
-                        onClick={() => setIsFullDisplay((current) => !current)}
-                        aria-label="Full display read"
-                        title="Full display read"
-                      >
-                        {isFullDisplay ? "✕ Exit full display" : "⛶ Full display read"}
-                      </button>
+                    <div
+                      className={isFullDisplay ? "reader-full-display active" : "reader-full-display"}
+                      style={
+                        readerFontSize !== null
+                          ? ({ "--reader-font-size": `${readerFontSize}px` } as React.CSSProperties)
+                          : undefined
+                      }
+                    >
+                      <div className="reader-focus-bar">
+                        <button
+                          type="button"
+                          className="full-display-toggle"
+                          onClick={() => setIsFullDisplay((current) => !current)}
+                          aria-label="Full display read"
+                          title="Full display read"
+                        >
+                          {isFullDisplay ? "✕ Exit full display" : "⛶ Full display read"}
+                        </button>
+                        {isFullDisplay && (
+                          <div className="reader-font-controls">
+                            <button
+                              type="button"
+                              onClick={() => adjustReaderFontSize(-readerFontSizeStep)}
+                              disabled={readerFontSize !== null && readerFontSize <= minReaderFontSize}
+                              aria-label="Decrease text size"
+                              title="Decrease text size"
+                            >
+                              −
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => adjustReaderFontSize(readerFontSizeStep)}
+                              disabled={readerFontSize !== null && readerFontSize >= maxReaderFontSize}
+                              aria-label="Increase text size"
+                              title="Increase text size"
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <table className="two-col">
                       <tbody>
                         <tr>
                           <td>
+                            {audioUrl && (
+                              <audio
+                                ref={audioRef}
+                                className="audio-player"
+                                src={audioUrl}
+                                controls
+                                onTimeUpdate={handleAudioTimeUpdate}
+                              />
+                            )}
                             <ClickableArabicText
                               lines={documentLines}
                               resolvedWords={resolvedWords}
                               selectedTokenId={selectedToken?.id ?? null}
+                              activeTokenId={activeTokenId}
                               onSelectToken={handleSelectToken}
                               onSelectPhrase={handleSelectPhrase}
                             />
