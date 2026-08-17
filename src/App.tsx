@@ -25,11 +25,7 @@ import { welcomeText } from "./content/welcomeText";
 import type { DocumentLine, ReaderWordEntry, WordToken } from "./types";
 
 function isAudioFile(file: File): boolean {
-  return file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|aac|flac)$/i.test(file.name);
-}
-
-function isVideoFile(file: File): boolean {
-  return file.type.startsWith("video/") || /\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(file.name);
+  return file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(file.name);
 }
 
 type View = "read" | "cards";
@@ -71,11 +67,9 @@ function App() {
   );
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
-  const [isVideoMedia, setIsVideoMedia] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
-  const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
-  const mediaRef = useRef<HTMLMediaElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const [transcriptionEngine, setTranscriptionEngineState] = useState<TranscriptionEngine>(getTranscriptionEngine);
   const [elevenLabsApiKey, setElevenLabsApiKeyState] = useState<string>(getElevenLabsApiKey);
@@ -92,9 +86,9 @@ function App() {
 
   useEffect(() => {
     return () => {
-      if (mediaUrl) URL.revokeObjectURL(mediaUrl);
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
-  }, [mediaUrl]);
+  }, [audioUrl]);
 
   const runAnalysis = useCallback(async (lines: DocumentLine[], targetLanguage: string) => {
     setIsBusy(true);
@@ -146,8 +140,7 @@ function App() {
       setResolvedWords({});
       setSelectedToken(null);
       setActiveTokenId(null);
-      setActiveLineIndex(null);
-      setMediaUrl(null);
+      setAudioUrl(null);
       setIsBusy(true);
       setProgress(null);
       setStatusMessage(`Reading ${file.name}...`);
@@ -170,16 +163,14 @@ function App() {
     [language, runAnalysis],
   );
 
-  const handleMediaFile = useCallback(
-    async (file: File, isVideo: boolean) => {
+  const handleAudioFile = useCallback(
+    async (file: File) => {
       setFileName(file.name);
       setDocumentLines([]);
       setResolvedWords({});
       setSelectedToken(null);
       setActiveTokenId(null);
-      setActiveLineIndex(null);
-      setIsVideoMedia(isVideo);
-      setMediaUrl(URL.createObjectURL(file));
+      setAudioUrl(URL.createObjectURL(file));
       setIsBusy(true);
       setProgress(null);
       setStatusMessage(`Reading ${file.name}...`);
@@ -191,7 +182,7 @@ function App() {
           if (!apiKey) {
             throw new Error("Paste your ElevenLabs API key in Settings first, or switch the engine back to Free.");
           }
-          setStatusMessage(`Transcribing ${isVideo ? "video" : "audio"} via ElevenLabs...`);
+          setStatusMessage("Transcribing audio via ElevenLabs...");
           ({ words } = await transcribeWithElevenLabs(file, apiKey));
         } else {
           ({ words } = await transcribeArabicAudio(file, (message) => setStatusMessage(message)));
@@ -202,18 +193,7 @@ function App() {
         setStatusMessage("Transcribed. Now analyzing words...");
         await runAnalysis(lines, language);
       } catch (error) {
-        const rawMessage = error instanceof Error ? error.message : "";
-        const isDecodeFailure = /decod/i.test(rawMessage);
-
-        if (isDecodeFailure && transcriptionEngine === "free") {
-          setStatusMessage(
-            "This browser couldn't decode that file's audio track (common with .mov screen recordings). " +
-              "Try switching to ElevenLabs in Settings — it handles video/audio server-side and isn't limited " +
-              "by what the browser itself can decode.",
-          );
-        } else {
-          setStatusMessage(rawMessage || `Could not transcribe that ${isVideo ? "video" : "audio"}.`);
-        }
+        setStatusMessage(error instanceof Error ? error.message : "Could not transcribe that audio.");
         setIsBusy(false);
       }
     },
@@ -222,39 +202,26 @@ function App() {
 
   const handleFile = useCallback(
     (file: File) => {
-      if (isVideoFile(file)) {
-        void handleMediaFile(file, true);
-      } else if (isAudioFile(file)) {
-        void handleMediaFile(file, false);
-      } else {
-        void handleTextFile(file);
-      }
+      void (isAudioFile(file) ? handleAudioFile(file) : handleTextFile(file));
     },
-    [handleMediaFile, handleTextFile],
+    [handleAudioFile, handleTextFile],
   );
 
-  const handleMediaTimeUpdate = useCallback(() => {
-    const currentTime = mediaRef.current?.currentTime;
+  const handleAudioTimeUpdate = useCallback(() => {
+    const currentTime = audioRef.current?.currentTime;
     if (currentTime === undefined) return;
 
-    let foundTokenId: string | null = null;
-    let foundLineIndex: number | null = null;
+    let found: string | null = null;
     outer: for (const line of documentLines) {
       for (const token of line.tokens) {
         if (token.start === undefined || token.end === undefined) continue;
         if (currentTime >= token.start && currentTime < token.end) {
-          foundTokenId = token.id;
-          foundLineIndex = line.lineIndex;
+          found = token.id;
           break outer;
         }
       }
     }
-    setActiveTokenId(foundTokenId);
-    // Keep showing the last known line through brief inter-word gaps instead of
-    // blanking the subtitle line every time currentTime falls between two timestamps.
-    if (foundLineIndex !== null) {
-      setActiveLineIndex(foundLineIndex);
-    }
+    setActiveTokenId(found);
   }, [documentLines]);
 
   const handleLanguageChange = useCallback(
@@ -272,8 +239,8 @@ function App() {
   const handleSelectToken = useCallback((token: WordToken) => {
     setSelectedPhrase(null);
     setSelectedToken(token);
-    if (token.start !== undefined && mediaRef.current) {
-      mediaRef.current.currentTime = token.start;
+    if (token.start !== undefined && audioRef.current) {
+      audioRef.current.currentTime = token.start;
     }
   }, []);
 
@@ -296,11 +263,6 @@ function App() {
     setSelectedToken(null);
     setSelectedPhrase(null);
   }, []);
-
-  // Video mode shows one subtitle line at a time (updating as playback moves through
-  // the transcript) instead of the full document text/audio mode both use.
-  const activeLine = activeLineIndex !== null ? documentLines[activeLineIndex] : null;
-  const readerLines = isVideoMedia ? (activeLine ? [activeLine] : []) : documentLines;
 
   return (
     <table className="page" cellPadding={0} cellSpacing={0}>
@@ -377,38 +339,23 @@ function App() {
                       <tbody>
                         <tr>
                           <td>
-                            {mediaUrl && isVideoMedia && (
-                              <video
-                                ref={(element) => {
-                                  mediaRef.current = element;
-                                }}
-                                className="video-player"
-                                src={mediaUrl}
-                                controls
-                                onTimeUpdate={handleMediaTimeUpdate}
-                              />
-                            )}
-                            {mediaUrl && !isVideoMedia && (
+                            {audioUrl && (
                               <audio
-                                ref={(element) => {
-                                  mediaRef.current = element;
-                                }}
+                                ref={audioRef}
                                 className="audio-player"
-                                src={mediaUrl}
+                                src={audioUrl}
                                 controls
-                                onTimeUpdate={handleMediaTimeUpdate}
+                                onTimeUpdate={handleAudioTimeUpdate}
                               />
                             )}
-                            <div className={isVideoMedia ? "subtitle-block" : undefined}>
-                              <ClickableArabicText
-                                lines={readerLines}
-                                resolvedWords={resolvedWords}
-                                selectedTokenId={selectedToken?.id ?? null}
-                                activeTokenId={activeTokenId}
-                                onSelectToken={handleSelectToken}
-                                onSelectPhrase={handleSelectPhrase}
-                              />
-                            </div>
+                            <ClickableArabicText
+                              lines={documentLines}
+                              resolvedWords={resolvedWords}
+                              selectedTokenId={selectedToken?.id ?? null}
+                              activeTokenId={activeTokenId}
+                              onSelectToken={handleSelectToken}
+                              onSelectPhrase={handleSelectPhrase}
+                            />
                             <a href="https://nushud.com" target="_blank" rel="noopener noreferrer" className="inline-promo">
                               <img src="/nushud-app-preview.jpeg" alt="NUSHUD app" className="inline-promo-image" />
                               <span>Also try NUSHUD — learn Arabic through nasheeds</span>
