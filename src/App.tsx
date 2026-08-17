@@ -8,11 +8,16 @@ import { StatusBar } from "./components/StatusBar";
 import { SavedCardsPage } from "./components/SavedCardsPage";
 import { getSupabaseClient } from "./lib/supabase/client";
 import { extractFromFile } from "./utils/extractText";
-import { buildDocumentLines } from "./utils/arabicText";
+import { buildDocumentLines, buildDocumentLinesFromTranscribedWords } from "./utils/arabicText";
+import { transcribeArabicAudio } from "./utils/transcribeAudio";
 import { analyzeDocumentWords } from "./repositories/wordAnalysisService";
 import { translateText } from "./utils/freeTranslate";
 import { welcomeText } from "./content/welcomeText";
 import type { DocumentLine, ReaderWordEntry, WordToken } from "./types";
+
+function isAudioFile(file: File): boolean {
+  return file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(file.name);
+}
 
 type View = "read" | "cards";
 
@@ -52,6 +57,16 @@ function App() {
     "This is a live demo — click a word below, or upload your own file to replace it.",
   );
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+  }, [audioUrl]);
 
   const runAnalysis = useCallback(async (lines: DocumentLine[], targetLanguage: string) => {
     setIsBusy(true);
@@ -96,12 +111,14 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFile = useCallback(
+  const handleTextFile = useCallback(
     async (file: File) => {
       setFileName(file.name);
       setDocumentLines([]);
       setResolvedWords({});
       setSelectedToken(null);
+      setActiveTokenId(null);
+      setAudioUrl(null);
       setIsBusy(true);
       setProgress(null);
       setStatusMessage(`Reading ${file.name}...`);
@@ -124,6 +141,56 @@ function App() {
     [language, runAnalysis],
   );
 
+  const handleAudioFile = useCallback(
+    async (file: File) => {
+      setFileName(file.name);
+      setDocumentLines([]);
+      setResolvedWords({});
+      setSelectedToken(null);
+      setActiveTokenId(null);
+      setAudioUrl(URL.createObjectURL(file));
+      setIsBusy(true);
+      setProgress(null);
+      setStatusMessage(`Reading ${file.name}...`);
+
+      try {
+        const { words } = await transcribeArabicAudio(file, (message) => setStatusMessage(message));
+        const lines = buildDocumentLinesFromTranscribedWords(words);
+        setDocumentLines(lines);
+        setStatusMessage("Transcribed. Now analyzing words...");
+        await runAnalysis(lines, language);
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : "Could not transcribe that audio.");
+        setIsBusy(false);
+      }
+    },
+    [language, runAnalysis],
+  );
+
+  const handleFile = useCallback(
+    (file: File) => {
+      void (isAudioFile(file) ? handleAudioFile(file) : handleTextFile(file));
+    },
+    [handleAudioFile, handleTextFile],
+  );
+
+  const handleAudioTimeUpdate = useCallback(() => {
+    const currentTime = audioRef.current?.currentTime;
+    if (currentTime === undefined) return;
+
+    let found: string | null = null;
+    outer: for (const line of documentLines) {
+      for (const token of line.tokens) {
+        if (token.start === undefined || token.end === undefined) continue;
+        if (currentTime >= token.start && currentTime < token.end) {
+          found = token.id;
+          break outer;
+        }
+      }
+    }
+    setActiveTokenId(found);
+  }, [documentLines]);
+
   const handleLanguageChange = useCallback(
     (nextLanguage: string) => {
       setLanguage(nextLanguage);
@@ -139,6 +206,9 @@ function App() {
   const handleSelectToken = useCallback((token: WordToken) => {
     setSelectedPhrase(null);
     setSelectedToken(token);
+    if (token.start !== undefined && audioRef.current) {
+      audioRef.current.currentTime = token.start;
+    }
   }, []);
 
   const handleSelectPhrase = useCallback(
@@ -229,10 +299,20 @@ function App() {
                       <tbody>
                         <tr>
                           <td>
+                            {audioUrl && (
+                              <audio
+                                ref={audioRef}
+                                className="audio-player"
+                                src={audioUrl}
+                                controls
+                                onTimeUpdate={handleAudioTimeUpdate}
+                              />
+                            )}
                             <ClickableArabicText
                               lines={documentLines}
                               resolvedWords={resolvedWords}
                               selectedTokenId={selectedToken?.id ?? null}
+                              activeTokenId={activeTokenId}
                               onSelectToken={handleSelectToken}
                               onSelectPhrase={handleSelectPhrase}
                             />

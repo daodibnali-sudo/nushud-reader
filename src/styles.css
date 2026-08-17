@@ -260,6 +260,18 @@ button:disabled {
   text-decoration: none;
 }
 
+/* The word currently being spoken during audio playback. */
+.arabic-token.is-speaking {
+  color: #000000;
+  background: #ffe58a;
+  text-decoration: none;
+}
+
+.audio-player {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
 .arabic-token-plain {
   color: #000000;
 }
