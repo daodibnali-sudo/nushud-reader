@@ -19,7 +19,24 @@ type View = "read" | "cards";
 function App() {
   const supabase = useMemo(() => getSupabaseClient(), []);
 
-  const [view, setView] = useState<View>("read");
+  const [view, setViewState] = useState<View>(() => (window.location.pathname === "/cards" ? "cards" : "read"));
+
+  const setView = useCallback((nextView: View) => {
+    setViewState(nextView);
+    const path = nextView === "cards" ? "/cards" : "/";
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, "", path);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => {
+      setViewState(window.location.pathname === "/cards" ? "cards" : "read");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const [fileName, setFileName] = useState("");
   const [documentLines, setDocumentLines] = useState<DocumentLine[]>(() => buildDocumentLines(welcomeText));
   const [language, setLanguage] = useState("en");
@@ -278,7 +295,8 @@ function App() {
             © 2026 ArabicWordByWord. All rights reserved. ·{" "}
             <a href="https://buy.stripe.com/9B63cufAI6OcgEq7IJ8ww00" target="_blank" rel="noopener noreferrer">
               Support this project
-            </a>
+            </a>{" "}
+            · <a href="mailto:daodibnali@gmail.com">Contact</a>
           </td>
         </tr>
       </tbody>
