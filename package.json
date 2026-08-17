@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
+    "@vercel/analytics": "^2.0.1",
     "mammoth": "^1.8.0",
     "pdfjs-dist": "^4.7.76",
     "react": "^19.0.0",
