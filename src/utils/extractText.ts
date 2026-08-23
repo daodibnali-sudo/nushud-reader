@@ -11,7 +11,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 const minArabicDensityForTextLayer = 0.25;
-const ocrRenderScale = 2;
+// A PDF point is defined as 1/72in, and pdf.js's viewport scale is pixels-per-point, so
+// this scale factor works out to ~288 DPI - close to the ~300 DPI Tesseract needs to
+// reliably resolve small Arabic harakat marks. The previous scale of 2 (~144 DPI) was
+// the main reason OCR quality was poor even on genuinely clean/high-quality source PDFs.
+const ocrRenderScale = 4;
+const ocrRenderDpi = 72 * ocrRenderScale;
 
 export async function extractFromFile(file: File, onStatus: (message: string) => void): Promise<ExtractionResult> {
   const lowerName = file.name.toLowerCase();
@@ -89,7 +94,7 @@ async function extractFromPdf(file: File, onStatus: (message: string) => void): 
 
   for (const ocrPage of pagesNeedingOcr) {
     onStatus(`Running OCR on page ${ocrPage.pageIndex + 1} of ${pdf.numPages} (this can take a moment)...`);
-    const text = await recognizeArabicText(ocrPage.dataUrl);
+    const text = await recognizeArabicText(ocrPage.dataUrl, ocrRenderDpi);
     pages[ocrPage.pageIndex] = { pageIndex: ocrPage.pageIndex, text, source: "ocr" };
   }
 
