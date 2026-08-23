@@ -4,6 +4,24 @@ import mammoth from "mammoth";
 import type { ExtractionPageResult, ExtractionResult } from "../types";
 import { arabicDensity } from "./arabicText";
 import { recognizeArabicText } from "./ocr";
+import { recognizeWithGoogleVision } from "./ocrGoogleVision";
+import type { OcrEngine } from "../repositories/ocrSettings";
+
+export type OcrOptions = {
+  engine: OcrEngine;
+  googleVisionApiKey?: string;
+};
+
+async function runOcr(dataUrl: string, dpi: number, ocr: OcrOptions): Promise<string> {
+  if (ocr.engine === "google-vision") {
+    const apiKey = ocr.googleVisionApiKey?.trim();
+    if (!apiKey) {
+      throw new Error("Paste your Google Cloud Vision API key in Settings first, or switch OCR back to Free.");
+    }
+    return recognizeWithGoogleVision(dataUrl, apiKey);
+  }
+  return recognizeArabicText(dataUrl, dpi);
+}
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -18,7 +36,11 @@ const minArabicDensityForTextLayer = 0.25;
 const ocrRenderScale = 4;
 const ocrRenderDpi = 72 * ocrRenderScale;
 
-export async function extractFromFile(file: File, onStatus: (message: string) => void): Promise<ExtractionResult> {
+export async function extractFromFile(
+  file: File,
+  onStatus: (message: string) => void,
+  ocr: OcrOptions = { engine: "free" },
+): Promise<ExtractionResult> {
   const lowerName = file.name.toLowerCase();
 
   if (lowerName.endsWith(".txt") || file.type === "text/plain") {
@@ -54,13 +76,13 @@ export async function extractFromFile(file: File, onStatus: (message: string) =>
   }
 
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") {
-    return extractFromPdf(file, onStatus);
+    return extractFromPdf(file, onStatus, ocr);
   }
 
   if (file.type.startsWith("image/")) {
     onStatus("Running OCR on image (this can take a moment)...");
     const dataUrl = await fileToDataUrl(file);
-    const text = await recognizeArabicText(dataUrl);
+    const text = await runOcr(dataUrl, 300, ocr);
     return {
       fileName: file.name,
       fullText: text,
@@ -72,7 +94,7 @@ export async function extractFromFile(file: File, onStatus: (message: string) =>
   throw new Error(`Unsupported file type for ${file.name}. Use .txt, .docx, .pdf, or an image.`);
 }
 
-async function extractFromPdf(file: File, onStatus: (message: string) => void): Promise<ExtractionResult> {
+async function extractFromPdf(file: File, onStatus: (message: string) => void, ocr: OcrOptions): Promise<ExtractionResult> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const pages: ExtractionPageResult[] = new Array(pdf.numPages);
@@ -94,7 +116,7 @@ async function extractFromPdf(file: File, onStatus: (message: string) => void): 
 
   for (const ocrPage of pagesNeedingOcr) {
     onStatus(`Running OCR on page ${ocrPage.pageIndex + 1} of ${pdf.numPages} (this can take a moment)...`);
-    const text = await recognizeArabicText(ocrPage.dataUrl, ocrRenderDpi);
+    const text = await runOcr(ocrPage.dataUrl, ocrRenderDpi, ocr);
     pages[ocrPage.pageIndex] = { pageIndex: ocrPage.pageIndex, text, source: "ocr" };
   }
 

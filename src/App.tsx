@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UploadPanel } from "./components/UploadPanel";
 import { LanguageSelect } from "./components/LanguageSelect";
 import { TranscriptionSettings } from "./components/TranscriptionSettings";
+import { OcrSettings } from "./components/OcrSettings";
 import { ClickableArabicText } from "./components/ClickableArabicText";
 import { WordInfoPanel } from "./components/WordInfoPanel";
 import { PhraseInfoPanel } from "./components/PhraseInfoPanel";
@@ -19,6 +20,13 @@ import {
   setTranscriptionEngine,
   type TranscriptionEngine,
 } from "./repositories/elevenLabsSettings";
+import {
+  getGoogleVisionApiKey,
+  getOcrEngine,
+  setGoogleVisionApiKey,
+  setOcrEngine,
+  type OcrEngine,
+} from "./repositories/ocrSettings";
 import { analyzeDocumentWords } from "./repositories/wordAnalysisService";
 import { translateText } from "./utils/freeTranslate";
 import { welcomeText } from "./content/welcomeText";
@@ -96,6 +104,19 @@ function App() {
     setElevenLabsApiKey(apiKey);
   }, []);
 
+  const [ocrEngine, setOcrEngineState] = useState<OcrEngine>(getOcrEngine);
+  const [googleVisionApiKey, setGoogleVisionApiKeyState] = useState<string>(getGoogleVisionApiKey);
+
+  const handleOcrEngineChange = useCallback((engine: OcrEngine) => {
+    setOcrEngineState(engine);
+    setOcrEngine(engine);
+  }, []);
+
+  const handleGoogleVisionApiKeyChange = useCallback((apiKey: string) => {
+    setGoogleVisionApiKeyState(apiKey);
+    setGoogleVisionApiKey(apiKey);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -158,7 +179,10 @@ function App() {
       setStatusMessage(`Reading ${file.name}...`);
 
       try {
-        const extraction = await extractFromFile(file, (message) => setStatusMessage(message));
+        const extraction = await extractFromFile(file, (message) => setStatusMessage(message), {
+          engine: ocrEngine,
+          googleVisionApiKey,
+        });
         const lines = buildDocumentLines(extraction.fullText);
         setDocumentLines(lines);
 
@@ -172,7 +196,7 @@ function App() {
         setIsBusy(false);
       }
     },
-    [language, runAnalysis],
+    [language, runAnalysis, ocrEngine, googleVisionApiKey],
   );
 
   const handleAudioFile = useCallback(
@@ -324,6 +348,13 @@ function App() {
                   <legend>Settings</legend>
                   <LanguageSelect value={language} onChange={handleLanguageChange} disabled={isBusy} />
                 </fieldset>
+                <OcrSettings
+                  engine={ocrEngine}
+                  apiKey={googleVisionApiKey}
+                  onEngineChange={handleOcrEngineChange}
+                  onApiKeyChange={handleGoogleVisionApiKeyChange}
+                  disabled={isBusy}
+                />
                 <TranscriptionSettings
                   engine={transcriptionEngine}
                   apiKey={elevenLabsApiKey}
