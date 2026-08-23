@@ -51,11 +51,35 @@ export type ExtractionPageResult = {
   source: ExtractionSourceKind;
 };
 
+/** A single OCR'd word's position on its source page image, as a percentage of the
+ * image's width/height so the overlay stays aligned regardless of display size. */
+export type OcrWordBox = {
+  text: string;
+  xPct: number;
+  yPct: number;
+  widthPct: number;
+  heightPct: number;
+};
+
+export type OcrResult = {
+  text: string;
+  words: OcrWordBox[];
+};
+
+/** One OCR'd page: the rendered/uploaded page image plus every word's position on it,
+ * used to render a tappable text layer directly over the original scan. */
+export type OcrPageResult = {
+  imageDataUrl: string;
+  words: OcrWordBox[];
+};
+
 export type ExtractionResult = {
   fileName: string;
   fullText: string;
   pages: ExtractionPageResult[];
   usedOcrPageCount: number;
+  /** Empty unless OCR ran - text-layer PDFs, .txt, and .docx have no page image to overlay. */
+  ocrPages: OcrPageResult[];
 };
 
 export type TranscribedWord = {

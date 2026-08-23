@@ -1,4 +1,4 @@
-import type { DocumentLine, TranscribedWord, WordToken } from "../types";
+import type { DocumentLine, OcrPageResult, TranscribedWord, WordToken } from "../types";
 
 // Written with explicit \u escapes (not literal glyphs) so the range order can't get
 // silently scrambled by an editor/tool round-trip — that exact bug once made every
@@ -102,6 +102,63 @@ export function buildDocumentLinesFromTranscribedWords(words: TranscribedWord[])
   });
 
   return lines;
+}
+
+export type OcrOverlayWord = WordToken & {
+  xPct: number;
+  yPct: number;
+  widthPct: number;
+  heightPct: number;
+};
+
+export type OcrOverlayPage = {
+  imageDataUrl: string;
+  words: OcrOverlayWord[];
+};
+
+/**
+ * Builds both halves an OCR'd, page-image-overlay document needs from the same word
+ * boxes: DocumentLine[] (one per page) so the existing translation pipeline works
+ * unchanged, and OcrOverlayPage[] (word position carried alongside each WordToken) for
+ * rendering the tappable text layer directly on top of the original scan. Both sides
+ * share the same token ids/normalized text, so resolvedWords lookups line up.
+ */
+export function buildDocumentFromOcrPages(ocrPages: OcrPageResult[]): {
+  lines: DocumentLine[];
+  overlayPages: OcrOverlayPage[];
+} {
+  let tokenId = 0;
+  const lines: DocumentLine[] = [];
+  const overlayPages: OcrOverlayPage[] = [];
+
+  ocrPages.forEach((page, pageIndex) => {
+    const tokens: WordToken[] = [];
+    const overlayWords: OcrOverlayWord[] = [];
+
+    page.words.forEach((word, tokenIndex) => {
+      tokenId += 1;
+      const token: WordToken = {
+        id: `o${tokenId}`,
+        raw: word.text,
+        normalized: normalizeArabicWord(word.text),
+        lineIndex: pageIndex,
+        tokenIndex,
+      };
+      tokens.push(token);
+      overlayWords.push({
+        ...token,
+        xPct: word.xPct,
+        yPct: word.yPct,
+        widthPct: word.widthPct,
+        heightPct: word.heightPct,
+      });
+    });
+
+    lines.push({ lineIndex: pageIndex, tokens });
+    overlayPages.push({ imageDataUrl: page.imageDataUrl, words: overlayWords });
+  });
+
+  return { lines, overlayPages };
 }
 
 export function uniqueNormalizedWords(lines: DocumentLine[]): string[] {

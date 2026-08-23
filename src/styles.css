@@ -272,6 +272,33 @@ button:disabled {
   margin-bottom: 10px;
 }
 
+/* One OCR'd page: the original scan with a tappable word layer positioned on top of it. */
+.ocr-page {
+  position: relative;
+  display: block;
+  margin-bottom: 12px;
+  border: 1px solid #999999;
+}
+
+.ocr-page-image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ocr-word {
+  position: absolute;
+  display: block;
+  cursor: pointer;
+}
+
+.ocr-word.is-known {
+  background: rgba(0, 51, 102, 0.12);
+}
+
+.ocr-word.is-selected {
+  background: rgba(204, 0, 0, 0.4);
+}
 
 .arabic-token-plain {
   color: #000000;

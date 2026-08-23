@@ -4,13 +4,19 @@ import { LanguageSelect } from "./components/LanguageSelect";
 import { TranscriptionSettings } from "./components/TranscriptionSettings";
 import { OcrSettings } from "./components/OcrSettings";
 import { ClickableArabicText } from "./components/ClickableArabicText";
+import { OcrPageOverlay } from "./components/OcrPageOverlay";
 import { WordInfoPanel } from "./components/WordInfoPanel";
 import { PhraseInfoPanel } from "./components/PhraseInfoPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SavedCardsPage } from "./components/SavedCardsPage";
 import { getSupabaseClient } from "./lib/supabase/client";
 import { extractFromFile } from "./utils/extractText";
-import { buildDocumentLines, buildDocumentLinesFromTranscribedWords } from "./utils/arabicText";
+import {
+  buildDocumentFromOcrPages,
+  buildDocumentLines,
+  buildDocumentLinesFromTranscribedWords,
+  type OcrOverlayPage,
+} from "./utils/arabicText";
 import { transcribeArabicAudio } from "./utils/transcribeAudio";
 import { transcribeWithElevenLabs } from "./utils/transcribeElevenLabs";
 import {
@@ -90,6 +96,8 @@ function App() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  const [ocrOverlayPages, setOcrOverlayPages] = useState<OcrOverlayPage[]>([]);
 
   const [transcriptionEngine, setTranscriptionEngineState] = useState<TranscriptionEngine>(getTranscriptionEngine);
   const [elevenLabsApiKey, setElevenLabsApiKeyState] = useState<string>(getElevenLabsApiKey);
@@ -174,6 +182,7 @@ function App() {
       setSelectedToken(null);
       setActiveTokenId(null);
       setAudioUrl(null);
+      setOcrOverlayPages([]);
       setIsBusy(true);
       setProgress(null);
       setStatusMessage(`Reading ${file.name}...`);
@@ -183,7 +192,15 @@ function App() {
           engine: ocrEngine,
           googleVisionApiKey,
         });
-        const lines = buildDocumentLines(extraction.fullText);
+
+        let lines: DocumentLine[];
+        if (extraction.ocrPages.length > 0) {
+          const built = buildDocumentFromOcrPages(extraction.ocrPages);
+          lines = built.lines;
+          setOcrOverlayPages(built.overlayPages);
+        } else {
+          lines = buildDocumentLines(extraction.fullText);
+        }
         setDocumentLines(lines);
 
         if (extraction.usedOcrPageCount > 0) {
@@ -207,6 +224,7 @@ function App() {
       setSelectedToken(null);
       setActiveTokenId(null);
       setAudioUrl(URL.createObjectURL(file));
+      setOcrOverlayPages([]);
       setIsBusy(true);
       setProgress(null);
       setStatusMessage(`Reading ${file.name}...`);
@@ -422,14 +440,27 @@ function App() {
                                 onTimeUpdate={handleAudioTimeUpdate}
                               />
                             )}
-                            <ClickableArabicText
-                              lines={documentLines}
-                              resolvedWords={resolvedWords}
-                              selectedTokenId={selectedToken?.id ?? null}
-                              activeTokenId={activeTokenId}
-                              onSelectToken={handleSelectToken}
-                              onSelectPhrase={handleSelectPhrase}
-                            />
+                            {ocrOverlayPages.length > 0 ? (
+                              ocrOverlayPages.map((page, pageIndex) => (
+                                <OcrPageOverlay
+                                  key={pageIndex}
+                                  imageDataUrl={page.imageDataUrl}
+                                  words={page.words}
+                                  resolvedWords={resolvedWords}
+                                  selectedTokenId={selectedToken?.id ?? null}
+                                  onSelectToken={handleSelectToken}
+                                />
+                              ))
+                            ) : (
+                              <ClickableArabicText
+                                lines={documentLines}
+                                resolvedWords={resolvedWords}
+                                selectedTokenId={selectedToken?.id ?? null}
+                                activeTokenId={activeTokenId}
+                                onSelectToken={handleSelectToken}
+                                onSelectPhrase={handleSelectPhrase}
+                              />
+                            )}
                             <a href="https://nushud.com" target="_blank" rel="noopener noreferrer" className="inline-promo">
                               <img src="/nushud-app-preview.jpeg" alt="NUSHUD app" className="inline-promo-image" />
                               <span>Also try NUSHUD — learn Arabic through nasheeds</span>

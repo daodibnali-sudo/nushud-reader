@@ -1,7 +1,7 @@
 import * as pdfjsLib from "pdfjs-dist";
 import type { PDFPageProxy } from "pdfjs-dist";
 import mammoth from "mammoth";
-import type { ExtractionPageResult, ExtractionResult } from "../types";
+import type { ExtractionPageResult, ExtractionResult, OcrPageResult, OcrResult } from "../types";
 import { arabicDensity } from "./arabicText";
 import { recognizeArabicText } from "./ocr";
 import { recognizeWithGoogleVision } from "./ocrGoogleVision";
@@ -12,7 +12,9 @@ export type OcrOptions = {
   googleVisionApiKey?: string;
 };
 
-async function runOcr(dataUrl: string, dpi: number, ocr: OcrOptions): Promise<string> {
+/** pageWidth/pageHeight (pixels) are only used by the free Tesseract path - Google Vision
+ * reports its own page dimensions in the response, so it ignores them. */
+async function runOcr(dataUrl: string, pageWidth: number, pageHeight: number, dpi: number, ocr: OcrOptions): Promise<OcrResult> {
   if (ocr.engine === "google-vision") {
     const apiKey = ocr.googleVisionApiKey?.trim();
     if (!apiKey) {
@@ -20,7 +22,7 @@ async function runOcr(dataUrl: string, dpi: number, ocr: OcrOptions): Promise<st
     }
     return recognizeWithGoogleVision(dataUrl, apiKey);
   }
-  return recognizeArabicText(dataUrl, dpi);
+  return recognizeArabicText(dataUrl, pageWidth, pageHeight, dpi);
 }
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -50,6 +52,7 @@ export async function extractFromFile(
       fullText: text,
       pages: [{ pageIndex: 0, text, source: "text-layer" }],
       usedOcrPageCount: 0,
+      ocrPages: [],
     };
   }
 
@@ -72,6 +75,7 @@ export async function extractFromFile(
       fullText: value,
       pages: [{ pageIndex: 0, text: value, source: "text-layer" }],
       usedOcrPageCount: 0,
+      ocrPages: [],
     };
   }
 
@@ -82,12 +86,14 @@ export async function extractFromFile(
   if (file.type.startsWith("image/")) {
     onStatus("Running OCR on image (this can take a moment)...");
     const dataUrl = await fileToDataUrl(file);
-    const text = await runOcr(dataUrl, 300, ocr);
+    const { width, height } = await getImageDimensions(dataUrl);
+    const { text, words } = await runOcr(dataUrl, width, height, 300, ocr);
     return {
       fileName: file.name,
       fullText: text,
       pages: [{ pageIndex: 0, text, source: "ocr" }],
       usedOcrPageCount: 1,
+      ocrPages: [{ imageDataUrl: dataUrl, words }],
     };
   }
 
@@ -98,7 +104,7 @@ async function extractFromPdf(file: File, onStatus: (message: string) => void, o
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const pages: ExtractionPageResult[] = new Array(pdf.numPages);
-  const pagesNeedingOcr: Array<{ pageIndex: number; dataUrl: string }> = [];
+  const pagesNeedingOcr: Array<{ pageIndex: number; dataUrl: string; width: number; height: number }> = [];
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     onStatus(`Reading page ${pageNumber} of ${pdf.numPages}...`);
@@ -109,15 +115,18 @@ async function extractFromPdf(file: File, onStatus: (message: string) => void, o
     if (arabicDensity(pageText) >= minArabicDensityForTextLayer) {
       pages[pageNumber - 1] = { pageIndex: pageNumber - 1, text: pageText, source: "text-layer" };
     } else {
-      const dataUrl = await renderPageToDataUrl(page);
-      pagesNeedingOcr.push({ pageIndex: pageNumber - 1, dataUrl });
+      const rendered = await renderPageToDataUrl(page);
+      pagesNeedingOcr.push({ pageIndex: pageNumber - 1, ...rendered });
     }
   }
 
+  const ocrPages: OcrPageResult[] = [];
+
   for (const ocrPage of pagesNeedingOcr) {
     onStatus(`Running OCR on page ${ocrPage.pageIndex + 1} of ${pdf.numPages} (this can take a moment)...`);
-    const text = await runOcr(ocrPage.dataUrl, ocrRenderDpi, ocr);
+    const { text, words } = await runOcr(ocrPage.dataUrl, ocrPage.width, ocrPage.height, ocrRenderDpi, ocr);
     pages[ocrPage.pageIndex] = { pageIndex: ocrPage.pageIndex, text, source: "ocr" };
+    ocrPages.push({ imageDataUrl: ocrPage.dataUrl, words });
   }
 
   const resolvedPages = pages.filter((page): page is ExtractionPageResult => Boolean(page));
@@ -127,10 +136,11 @@ async function extractFromPdf(file: File, onStatus: (message: string) => void, o
     fullText: resolvedPages.map((page) => page.text).join("\n\n"),
     pages: resolvedPages,
     usedOcrPageCount: pagesNeedingOcr.length,
+    ocrPages,
   };
 }
 
-async function renderPageToDataUrl(page: PDFPageProxy): Promise<string> {
+async function renderPageToDataUrl(page: PDFPageProxy): Promise<{ dataUrl: string; width: number; height: number }> {
   const viewport = page.getViewport({ scale: ocrRenderScale });
   const canvas = document.createElement("canvas");
   canvas.width = viewport.width;
@@ -142,7 +152,16 @@ async function renderPageToDataUrl(page: PDFPageProxy): Promise<string> {
   }
 
   await page.render({ canvasContext: context, viewport }).promise;
-  return canvas.toDataURL("image/png");
+  return { dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height };
+}
+
+async function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error("Could not read this image's dimensions."));
+    image.src = dataUrl;
+  });
 }
 
 async function fileToDataUrl(file: File): Promise<string> {
