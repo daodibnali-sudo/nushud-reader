@@ -43,6 +43,18 @@ export function UploadPanel({ onFile, disabled }: UploadPanelProps) {
         .txt, .pdf, .docx, an image, or an audio file — drag a file here or choose one. Scanned pages are OCR'd
         automatically; audio is transcribed automatically so you can read along and tap any word while it plays.
       </p>
+      <p className="small">
+        Tip: this reader works best with plain text. For the cleanest results on a scanned PDF, convert it to text
+        first — try{" "}
+        <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer">
+          Google Drive's free OCR
+        </a>{" "}
+        (upload the PDF, then open it with Google Docs) for shorter documents, or{" "}
+        <a href="https://www.i2ocr.com/pdf-ocr-arabic" target="_blank" rel="noopener noreferrer">
+          i2OCR
+        </a>{" "}
+        for longer ones — then upload the resulting .txt here.
+      </p>
     </fieldset>
   );
 }
