@@ -9,11 +9,22 @@ type WordInfoPanelProps = {
   entry: ReaderWordEntry | null;
   language: string;
   isLoading: boolean;
+  /** QARI is reading this word from the page image (click-to-read). */
+  isReading?: boolean;
   onSaved?: () => void;
 };
 
-export function WordInfoPanel({ normalizedWord, word, entry, language, isLoading, onSaved }: WordInfoPanelProps) {
+export function WordInfoPanel({ normalizedWord, word, entry, language, isLoading, isReading, onSaved }: WordInfoPanelProps) {
   const [, forceRerender] = useState(0);
+
+  if (isReading) {
+    return (
+      <fieldset>
+        <legend>Word info</legend>
+        <p className="small">Reading this word with QARI...</p>
+      </fieldset>
+    );
+  }
 
   if (!word || !normalizedWord) {
     return (
@@ -53,6 +64,12 @@ export function WordInfoPanel({ normalizedWord, word, entry, language, isLoading
         </span>{" "}
         — {languageLabel(language)}
       </legend>
+
+      {word !== normalizedWord && (
+        <p className="arabic word-with-harakat" dir="rtl" lang="ar">
+          {word}
+        </p>
+      )}
 
       {!entry ? (
         <p className="small">{isLoading ? "Translating..." : "Not translated yet."}</p>

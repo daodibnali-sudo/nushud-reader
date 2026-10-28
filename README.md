@@ -72,3 +72,27 @@ No sign-in step — the app just opens.
   a translation (1-4 meanings), nothing else.
 - The free translation endpoint is unofficial; expect occasional failures on a given word (the
   status bar reports how many words failed after analysis finishes).
+
+## QARI-OCR (best harakat reading)
+
+[QARI-OCR](https://arxiv.org/abs/2506.02295) is a vision model that reads Arabic harakat far better
+than Tesseract. In **Settings → OCR engine**, "QARI-OCR on click" is offered whenever a QARI server is
+reachable (and is the default then); otherwise the app uses the Free (Tesseract) engine as before.
+
+How it works: pages appear in a couple of seconds with a box on every word, found by our own word finder
+(`src/utils/wordBoxes.ts` — Tesseract misses lines of fully vocalized text). Clicking a word sends just
+that crop to QARI (`src/utils/qari.ts`), which reads it in a few seconds; the box then shows the full
+word with harakat and its meaning. Multi-page files appear page by page, with Stop/Resume and a
+download of whatever is done so far.
+
+- **Production** (arabicwordbyword.com) uses `https://qari.nushud.com`, a CPU-only Ubuntu (WSL) laptop
+  behind a Cloudflare Tunnel (set via `VITE_QARI_OCR_URL`; this default is built in). Only the clicked
+  word's picture is sent; it isn't stored. `qari-server/gateway.py` is the public gateway: image-size
+  cap, 20 reads/min per visitor, max 6 queued reads, CORS limited to arabicwordbyword.com. It forwards to
+  llama.cpp running the Q6_K GGUF of Qari-OCR-0.2.2.1. `qari-server/laptop/` has the systemd units and
+  installer. The laptop must stay awake and logged in, with WSL kept running (`vmIdleTimeout=-1` in
+  `.wslconfig` and a logon task running `wsl -d Ubuntu-24.04 --exec sleep infinity`).
+- **Local (Apple Silicon)**: `./qari-server/setup.sh` once (needs `brew install uv`; builds an 8-bit MLX
+  model, ~2.8GB), then `npm run qari` next to `npm run dev`. The dev build looks for it on
+  `http://127.0.0.1:8765`. If that port is taken: `QARI_PORT=8766 npm run qari` and
+  `VITE_QARI_OCR_URL=http://127.0.0.1:8766 npm run dev`.

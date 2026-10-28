@@ -1,10 +1,11 @@
 import * as pdfjsLib from "pdfjs-dist";
 import type { PDFPageProxy } from "pdfjs-dist";
 import mammoth from "mammoth";
-import type { ExtractionPageResult, ExtractionResult, OcrPageResult, OcrResult } from "../types";
+import type { ExtractionSourceKind, OcrPageResult, OcrResult } from "../types";
 import { arabicDensity } from "./arabicText";
 import { recognizeArabicText } from "./ocr";
 import { recognizeWithGoogleVision } from "./ocrGoogleVision";
+import { locateWordsForQari } from "./qari";
 import type { OcrEngine } from "../repositories/ocrSettings";
 
 export type OcrOptions = {
@@ -22,6 +23,9 @@ async function runOcr(dataUrl: string, pageWidth: number, pageHeight: number, dp
     }
     return recognizeWithGoogleVision(dataUrl, apiKey);
   }
+  if (ocr.engine === "qari-click") {
+    return locateWordsForQari(dataUrl, pageWidth, pageHeight, dpi);
+  }
   return recognizeArabicText(dataUrl, pageWidth, pageHeight, dpi);
 }
 
@@ -38,22 +42,35 @@ const minArabicDensityForTextLayer = 0.25;
 const ocrRenderScale = 4;
 const ocrRenderDpi = 72 * ocrRenderScale;
 
-export async function extractFromFile(
-  file: File,
-  onStatus: (message: string) => void,
-  ocr: OcrOptions = { engine: "free" },
-): Promise<ExtractionResult> {
+/** One extracted page: its text, and (for OCR'd pages) the page image with every word's position. */
+export type DocumentPage = {
+  pageIndex: number;
+  text: string;
+  source: ExtractionSourceKind;
+  ocrPage?: OcrPageResult;
+};
+
+/**
+ * An opened file whose pages are extracted one at a time, so the reader can show each page as
+ * soon as it's done and the visitor can Stop and Resume between pages. Pages can be requested in
+ * any order, and again after a Stop.
+ */
+export type DocumentSession = {
+  pageCount: number;
+  extractPage: (
+    pageIndex: number,
+    ocr: OcrOptions,
+    signal: AbortSignal,
+    onStatus: (message: string) => void,
+  ) => Promise<DocumentPage>;
+};
+
+export async function openDocument(file: File, onStatus: (message: string) => void): Promise<DocumentSession> {
   const lowerName = file.name.toLowerCase();
 
   if (lowerName.endsWith(".txt") || file.type === "text/plain") {
     const text = await file.text();
-    return {
-      fileName: file.name,
-      fullText: text,
-      pages: [{ pageIndex: 0, text, source: "text-layer" }],
-      usedOcrPageCount: 0,
-      ocrPages: [],
-    };
+    return textSession({ pageIndex: 0, text, source: "text-layer" });
   }
 
   if (
@@ -70,73 +87,57 @@ export async function extractFromFile(
       );
     }
 
-    return {
-      fileName: file.name,
-      fullText: value,
-      pages: [{ pageIndex: 0, text: value, source: "text-layer" }],
-      usedOcrPageCount: 0,
-      ocrPages: [],
-    };
+    return textSession({ pageIndex: 0, text: value, source: "text-layer" });
   }
 
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") {
-    return extractFromPdf(file, onStatus, ocr);
+    return openPdf(file);
   }
 
   if (file.type.startsWith("image/")) {
-    onStatus("Running OCR on image (this can take a moment)...");
-    const dataUrl = await fileToDataUrl(file);
-    const { width, height } = await getImageDimensions(dataUrl);
-    const { text, words } = await runOcr(dataUrl, width, height, 300, ocr);
     return {
-      fileName: file.name,
-      fullText: text,
-      pages: [{ pageIndex: 0, text, source: "ocr" }],
-      usedOcrPageCount: 1,
-      ocrPages: [{ imageDataUrl: dataUrl, words }],
+      pageCount: 1,
+      extractPage: async (pageIndex, ocr, signal, onPageStatus) => {
+        onPageStatus("Running OCR on image (this can take a moment)...");
+        const dataUrl = await fileToDataUrl(file);
+        const { width, height } = await getImageDimensions(dataUrl);
+        const { text, words } = await runOcr(dataUrl, width, height, 300, ocr);
+        signal.throwIfAborted();
+        return { pageIndex, text, source: "ocr", ocrPage: { imageDataUrl: dataUrl, words } };
+      },
     };
   }
 
   throw new Error(`Unsupported file type for ${file.name}. Use .txt, .docx, .pdf, or an image.`);
 }
 
-async function extractFromPdf(file: File, onStatus: (message: string) => void, ocr: OcrOptions): Promise<ExtractionResult> {
+function textSession(page: DocumentPage): DocumentSession {
+  return { pageCount: 1, extractPage: async () => page };
+}
+
+async function openPdf(file: File): Promise<DocumentSession> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const pages: ExtractionPageResult[] = new Array(pdf.numPages);
-  const pagesNeedingOcr: Array<{ pageIndex: number; dataUrl: string; width: number; height: number }> = [];
-
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    onStatus(`Reading page ${pageNumber} of ${pdf.numPages}...`);
-    const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items.map((item) => ("str" in item ? item.str : "")).join(" ");
-
-    if (arabicDensity(pageText) >= minArabicDensityForTextLayer) {
-      pages[pageNumber - 1] = { pageIndex: pageNumber - 1, text: pageText, source: "text-layer" };
-    } else {
-      const rendered = await renderPageToDataUrl(page);
-      pagesNeedingOcr.push({ pageIndex: pageNumber - 1, ...rendered });
-    }
-  }
-
-  const ocrPages: OcrPageResult[] = [];
-
-  for (const ocrPage of pagesNeedingOcr) {
-    onStatus(`Running OCR on page ${ocrPage.pageIndex + 1} of ${pdf.numPages} (this can take a moment)...`);
-    const { text, words } = await runOcr(ocrPage.dataUrl, ocrPage.width, ocrPage.height, ocrRenderDpi, ocr);
-    pages[ocrPage.pageIndex] = { pageIndex: ocrPage.pageIndex, text, source: "ocr" };
-    ocrPages.push({ imageDataUrl: ocrPage.dataUrl, words });
-  }
-
-  const resolvedPages = pages.filter((page): page is ExtractionPageResult => Boolean(page));
 
   return {
-    fileName: file.name,
-    fullText: resolvedPages.map((page) => page.text).join("\n\n"),
-    pages: resolvedPages,
-    usedOcrPageCount: pagesNeedingOcr.length,
-    ocrPages,
+    pageCount: pdf.numPages,
+    extractPage: async (pageIndex, ocr, signal, onStatus) => {
+      const pageNumber = pageIndex + 1;
+      onStatus(`Reading page ${pageNumber} of ${pdf.numPages}...`);
+      const page = await pdf.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+
+      if (arabicDensity(pageText) >= minArabicDensityForTextLayer) {
+        return { pageIndex, text: pageText, source: "text-layer" };
+      }
+
+      const rendered = await renderPageToDataUrl(page);
+      onStatus(`Running OCR on page ${pageNumber} of ${pdf.numPages} (this can take a moment)...`);
+      const { text, words } = await runOcr(rendered.dataUrl, rendered.width, rendered.height, ocrRenderDpi, ocr);
+      signal.throwIfAborted();
+      return { pageIndex, text, source: "ocr", ocrPage: { imageDataUrl: rendered.dataUrl, words } };
+    },
   };
 }
 

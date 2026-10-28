@@ -3,6 +3,7 @@ import { UploadPanel } from "./components/UploadPanel";
 import { LanguageSelect } from "./components/LanguageSelect";
 import { TranscriptionSettings } from "./components/TranscriptionSettings";
 import { OcrSettings } from "./components/OcrSettings";
+import { ExportBar } from "./components/ExportBar";
 import { ClickableArabicText } from "./components/ClickableArabicText";
 import { OcrPageOverlay } from "./components/OcrPageOverlay";
 import { WordInfoPanel } from "./components/WordInfoPanel";
@@ -10,11 +11,14 @@ import { PhraseInfoPanel } from "./components/PhraseInfoPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SavedCardsPage } from "./components/SavedCardsPage";
 import { getSupabaseClient } from "./lib/supabase/client";
-import { extractFromFile } from "./utils/extractText";
+import { openDocument, type DocumentPage, type DocumentSession } from "./utils/extractText";
+import { isQariAvailable, readWordWithQari } from "./utils/qari";
+import { documentExportText } from "./utils/pageText";
 import {
   buildDocumentFromOcrPages,
   buildDocumentLines,
   buildDocumentLinesFromTranscribedWords,
+  normalizeArabicWord,
   type OcrOverlayPage,
 } from "./utils/arabicText";
 import { transcribeArabicAudio } from "./utils/transcribeAudio";
@@ -29,6 +33,7 @@ import {
 import {
   getGoogleVisionApiKey,
   getOcrEngine,
+  getStoredOcrEngine,
   setGoogleVisionApiKey,
   setOcrEngine,
   type OcrEngine,
@@ -36,7 +41,7 @@ import {
 import { analyzeDocumentWords } from "./repositories/wordAnalysisService";
 import { translateText } from "./utils/freeTranslate";
 import { welcomeText } from "./content/welcomeText";
-import type { DocumentLine, ReaderWordEntry, WordToken } from "./types";
+import type { DocumentLine, OcrPageResult, ReaderWordEntry, WordToken } from "./types";
 
 function isAudioFile(file: File): boolean {
   return file.type.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(file.name);
@@ -47,6 +52,12 @@ const maxReaderFontSize = 40;
 const readerFontSizeStep = 2;
 
 type View = "read" | "cards";
+type RunState = "idle" | "running" | "stopped" | "done";
+
+/** Words QARI hasn't read yet carry only Tesseract's guess; never look those up. */
+function withoutUnreadWords(lines: DocumentLine[]): DocumentLine[] {
+  return lines.map((line) => ({ ...line, tokens: line.tokens.filter((token) => !token.needsRead) }));
+}
 
 function App() {
   const supabase = useMemo(() => getSupabaseClient(), []);
@@ -99,6 +110,17 @@ function App() {
 
   const [ocrOverlayPages, setOcrOverlayPages] = useState<OcrOverlayPage[]>([]);
 
+  // Pages are extracted one at a time so each shows up as soon as it's done, and the visitor can
+  // Stop and Resume. donePagesRef is the source of truth; the state below is for rendering.
+  const sessionRef = useRef<DocumentSession | null>(null);
+  const donePagesRef = useRef<DocumentPage[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+  const [pageCount, setPageCount] = useState(0);
+  const [donePageCount, setDonePageCount] = useState(0);
+  const [runState, setRunState] = useState<RunState>("idle");
+  const [qariAvailable, setQariAvailable] = useState(false);
+  const [readingTokenId, setReadingTokenId] = useState<string | null>(null);
+
   const [transcriptionEngine, setTranscriptionEngineState] = useState<TranscriptionEngine>(getTranscriptionEngine);
   const [elevenLabsApiKey, setElevenLabsApiKeyState] = useState<string>(getElevenLabsApiKey);
 
@@ -130,6 +152,15 @@ function App() {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, [audioUrl]);
+
+  useEffect(() => {
+    void isQariAvailable().then((available) => {
+      setQariAvailable(available);
+      if (available && getStoredOcrEngine() === null) setOcrEngineState("qari-click");
+      // A remembered "QARI" choice can't be honoured while the server is off.
+      if (!available) setOcrEngineState((current) => (current === "qari-click" ? "free" : current));
+    });
+  }, []);
 
   const runAnalysis = useCallback(async (lines: DocumentLine[], targetLanguage: string) => {
     setIsBusy(true);
@@ -174,8 +205,124 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Looks up words in the background. Pages that arrive while a lookup is running are batched into
+  // the next one, so a fast PDF doesn't download and upload the dictionary once per page.
+  const pendingAnalysisLines = useRef<DocumentLine[]>([]);
+  const analysisDrain = useRef<Promise<void> | null>(null);
+  const failedAnalysisCount = useRef(0);
+
+  const queueAnalysis = useCallback(
+    (lines: DocumentLine[], targetLanguage: string): Promise<void> => {
+      const analyzable = withoutUnreadWords(lines);
+      if (analyzable.every((line) => line.tokens.length === 0)) return analysisDrain.current ?? Promise.resolve();
+      pendingAnalysisLines.current.push(...analyzable);
+      if (!analysisDrain.current) {
+        analysisDrain.current = (async () => {
+          while (pendingAnalysisLines.current.length > 0) {
+            const batch = pendingAnalysisLines.current.splice(0);
+            try {
+              const { failedWords } = await analyzeDocumentWords(supabase, batch, targetLanguage, {
+                onProgress: () => {},
+                onWordsResolved: (entries) => setResolvedWords((current) => ({ ...current, ...entries })),
+              });
+              failedAnalysisCount.current += failedWords.length;
+            } catch {
+              failedAnalysisCount.current += 1;
+            }
+          }
+          analysisDrain.current = null;
+        })();
+      }
+      return analysisDrain.current;
+    },
+    [supabase],
+  );
+
+  /** Rebuilds what's on screen from the pages done so far; returns the lines of the newest page. */
+  const rebuildDocument = useCallback((): DocumentLine[] => {
+    const done = donePagesRef.current;
+    const ocrPages: OcrPageResult[] = done.flatMap((page) => (page.ocrPage ? [page.ocrPage] : []));
+
+    if (ocrPages.length > 0) {
+      const built = buildDocumentFromOcrPages(ocrPages);
+      setOcrOverlayPages(built.overlayPages);
+      setDocumentLines(built.lines);
+      return built.lines.slice(-1);
+    }
+
+    setOcrOverlayPages([]);
+    setDocumentLines(buildDocumentLines(done.map((page) => page.text).join("\n\n")));
+    return buildDocumentLines(done[done.length - 1]?.text ?? "");
+  }, []);
+
+  /** Extracts pages from the first one not done yet, so it also serves as Resume after a Stop. */
+  const processPages = useCallback(async () => {
+    const session = sessionRef.current;
+    if (!session) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const done = donePagesRef.current;
+    setIsBusy(true);
+    setRunState("running");
+
+    try {
+      for (let pageIndex = done.length; pageIndex < session.pageCount; pageIndex += 1) {
+        if (session.pageCount > 1) setProgress({ current: pageIndex, total: session.pageCount });
+        const page = await session.extractPage(
+          pageIndex,
+          { engine: ocrEngine, googleVisionApiKey },
+          controller.signal,
+          setStatusMessage,
+        );
+        controller.signal.throwIfAborted();
+        done.push(page);
+        setDonePageCount(done.length);
+        void queueAnalysis(rebuildDocument(), language);
+      }
+
+      setProgress(null);
+      setStatusMessage("Finishing word lookups...");
+      await analysisDrain.current;
+      const failedCount = failedAnalysisCount.current;
+      const clickToRead = done.some((page) => page.ocrPage?.words.some((word) => word.needsRead !== undefined));
+      setStatusMessage(
+        failedCount > 0
+          ? `Done, but ${failedCount} word(s) could not be analyzed.`
+          : clickToRead
+            ? "Done. Click any word and QARI reads it from the scan."
+            : "Done. Every word is ready to tap.",
+      );
+      setRunState("done");
+    } catch (error) {
+      const next = `page ${done.length + 1} of ${session.pageCount}`;
+      if (controller.signal.aborted) {
+        setStatusMessage(`Stopped. Press Resume to continue from ${next}, or download what's done so far.`);
+      } else {
+        const message = error instanceof Error ? error.message : "Could not read that page.";
+        setStatusMessage(`${message} Press Resume to retry from ${next}.`);
+      }
+      if (session.pageCount > 1) setProgress({ current: done.length, total: session.pageCount });
+      setRunState("stopped");
+    } finally {
+      abortRef.current = null;
+      setIsBusy(false);
+    }
+  }, [language, ocrEngine, googleVisionApiKey, queueAnalysis, rebuildDocument]);
+
+  const stopProcessing = useCallback(() => abortRef.current?.abort(), []);
+
+  const resetDocument = useCallback(() => {
+    sessionRef.current = null;
+    donePagesRef.current = [];
+    failedAnalysisCount.current = 0;
+    setPageCount(0);
+    setDonePageCount(0);
+    setRunState("idle");
+  }, []);
+
   const handleTextFile = useCallback(
     async (file: File) => {
+      resetDocument();
       setFileName(file.name);
       setDocumentLines([]);
       setResolvedWords({});
@@ -188,36 +335,22 @@ function App() {
       setStatusMessage(`Reading ${file.name}...`);
 
       try {
-        const extraction = await extractFromFile(file, (message) => setStatusMessage(message), {
-          engine: ocrEngine,
-          googleVisionApiKey,
-        });
-
-        let lines: DocumentLine[];
-        if (extraction.ocrPages.length > 0) {
-          const built = buildDocumentFromOcrPages(extraction.ocrPages);
-          lines = built.lines;
-          setOcrOverlayPages(built.overlayPages);
-        } else {
-          lines = buildDocumentLines(extraction.fullText);
-        }
-        setDocumentLines(lines);
-
-        if (extraction.usedOcrPageCount > 0) {
-          setStatusMessage(`OCR'd ${extraction.usedOcrPageCount} page(s). Now analyzing words...`);
-        }
-
-        await runAnalysis(lines, language);
+        sessionRef.current = await openDocument(file, (message) => setStatusMessage(message));
       } catch (error) {
         setStatusMessage(error instanceof Error ? error.message : "Could not read that file.");
         setIsBusy(false);
+        return;
       }
+
+      setPageCount(sessionRef.current.pageCount);
+      await processPages();
     },
-    [language, runAnalysis, ocrEngine, googleVisionApiKey],
+    [processPages, resetDocument],
   );
 
   const handleAudioFile = useCallback(
     async (file: File) => {
+      resetDocument();
       setFileName(file.name);
       setDocumentLines([]);
       setResolvedWords({});
@@ -251,7 +384,7 @@ function App() {
         setIsBusy(false);
       }
     },
-    [language, runAnalysis, transcriptionEngine, elevenLabsApiKey],
+    [language, runAnalysis, transcriptionEngine, elevenLabsApiKey, resetDocument],
   );
 
   const handleFile = useCallback(
@@ -282,21 +415,48 @@ function App() {
     (nextLanguage: string) => {
       setLanguage(nextLanguage);
       if (documentLines.length > 0) {
-        void runAnalysis(documentLines, nextLanguage);
+        void runAnalysis(withoutUnreadWords(documentLines), nextLanguage);
       }
     },
     [documentLines, runAnalysis],
   );
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const exportText = useMemo(() => documentExportText(donePagesRef.current), [donePageCount, ocrOverlayPages, documentLines]);
+
   const selectedEntry = selectedToken ? resolvedWords[selectedToken.normalized] ?? null : null;
 
-  const handleSelectToken = useCallback((token: WordToken) => {
-    setSelectedPhrase(null);
-    setSelectedToken(token);
-    if (token.start !== undefined && audioRef.current) {
-      audioRef.current.currentTime = token.start;
-    }
-  }, []);
+  const handleSelectToken = useCallback(
+    async (token: WordToken) => {
+      setSelectedPhrase(null);
+      setSelectedToken(token);
+      if (token.start !== undefined && audioRef.current) {
+        audioRef.current.currentTime = token.start;
+      }
+      if (!token.needsRead) return;
+
+      // QARI click-to-read: crop this word from its page scan and have QARI read it now.
+      const ocrPages = donePagesRef.current.flatMap((page) => (page.ocrPage ? [page.ocrPage] : []));
+      const ocrPage = ocrPages[token.lineIndex];
+      const word = ocrPage?.words[token.tokenIndex];
+      if (!ocrPage || !word) return;
+
+      setReadingTokenId(token.id);
+      try {
+        const text = await readWordWithQari(ocrPage.imageDataUrl, word);
+        ocrPage.words[token.tokenIndex] = { ...word, text, needsRead: false };
+        rebuildDocument();
+        const readToken: WordToken = { ...token, raw: text, normalized: normalizeArabicWord(text), needsRead: false };
+        setSelectedToken((current) => (current?.id === token.id ? readToken : current));
+        void queueAnalysis([{ lineIndex: token.lineIndex, tokens: [readToken] }], language);
+      } catch (error) {
+        setStatusMessage(error instanceof Error ? error.message : "QARI couldn't read that word.");
+      } finally {
+        setReadingTokenId((current) => (current === token.id ? null : current));
+      }
+    },
+    [language, queueAnalysis, rebuildDocument],
+  );
 
   const handleSelectPhrase = useCallback(
     (text: string) => {
@@ -372,6 +532,7 @@ function App() {
                   onEngineChange={handleOcrEngineChange}
                   onApiKeyChange={handleGoogleVisionApiKeyChange}
                   disabled={isBusy}
+                  qariAvailable={qariAvailable}
                 />
                 <TranscriptionSettings
                   engine={transcriptionEngine}
@@ -384,8 +545,29 @@ function App() {
 
                 <StatusBar message={fileName ? `${fileName} — ${statusMessage}` : statusMessage} progress={progress} />
 
-                {documentLines.length > 0 && (
+                {(documentLines.length > 0 || pageCount > 0) && (
                   <>
+                    {pageCount > 0 && (
+                      <div className="reader-toolbar">
+                        <span className="run-controls">
+                          {runState === "running" && pageCount > 1 && (
+                            <button type="button" onClick={stopProcessing}>
+                              ■ Stop
+                            </button>
+                          )}
+                          {runState === "stopped" && donePageCount < pageCount && (
+                            <button type="button" onClick={() => void processPages()}>
+                              ▶ Resume from page {donePageCount + 1}
+                            </button>
+                          )}
+                        </span>
+                        <ExportBar
+                          fileName={fileName}
+                          text={exportText}
+                          partialLabel={donePageCount < pageCount ? `${donePageCount}/${pageCount} pages` : null}
+                        />
+                      </div>
+                    )}
                     <div
                       className={isFullDisplay ? "reader-full-display active" : "reader-full-display"}
                       style={
@@ -492,7 +674,8 @@ function App() {
                                   word={selectedToken?.raw ?? null}
                                   entry={selectedEntry}
                                   language={language}
-                                  isLoading={isBusy}
+                                  isLoading={isBusy || analysisDrain.current !== null}
+                                  isReading={readingTokenId !== null && readingTokenId === selectedToken?.id}
                                   onSaved={() => {
                                     if (window.matchMedia("(max-width: 640px)").matches) {
                                       setSelectedToken(null);

@@ -1,0 +1,15 @@
+# Public QARI gateway (rate limits, size caps, CORS) in front of the model server.
+[Unit]
+Description=QARI-OCR public gateway
+After=qari-llama.service
+Wants=qari-llama.service
+
+[Service]
+User=dave
+WorkingDirectory=/home/dave/qari
+ExecStart=/home/dave/qari/venv/bin/python /home/dave/qari/gateway.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

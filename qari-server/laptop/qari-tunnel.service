@@ -1,0 +1,14 @@
+# Cloudflare Tunnel: publishes the gateway at https://qari.nushud.com without opening any ports.
+[Unit]
+Description=Cloudflare Tunnel for qari.nushud.com
+After=network-online.target qari-gateway.service
+Wants=network-online.target
+
+[Service]
+User=dave
+ExecStart=/home/dave/qari/bin/cloudflared --no-autoupdate tunnel --config /home/dave/qari/tunnel.yml run
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

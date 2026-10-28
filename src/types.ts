@@ -34,6 +34,8 @@ export type WordToken = {
   /** Seconds into the source audio — only set for a transcribed-audio document, used to highlight the word being spoken during playback. */
   start?: number;
   end?: number;
+  /** QARI click-to-read pages: true until QARI has read this word (its text is only Tesseract's guess). */
+  needsRead?: boolean;
 };
 
 export type DocumentLine = {
@@ -59,6 +61,8 @@ export type OcrWordBox = {
   yPct: number;
   widthPct: number;
   heightPct: number;
+  /** Set on QARI click-to-read pages: the box is located but QARI hasn't read the word yet. */
+  needsRead?: boolean;
 };
 
 export type OcrResult = {

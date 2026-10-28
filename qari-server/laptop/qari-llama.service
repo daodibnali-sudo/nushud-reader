@@ -1,0 +1,18 @@
+# QARI-OCR model (llama.cpp, CPU). Installed to /etc/systemd/system by install-services.sh.
+[Unit]
+Description=QARI-OCR model server (llama.cpp)
+After=network.target
+
+[Service]
+User=dave
+WorkingDirectory=/home/dave/qari
+ExecStart=/home/dave/qari/llama.cpp/build/bin/llama-server \
+  -m /home/dave/qari/models/qari.gguf \
+  --mmproj /home/dave/qari/models/qari-mmproj.gguf \
+  --host 127.0.0.1 --port 8080 \
+  --threads 6 --ctx-size 2048 --parallel 1 --no-webui
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

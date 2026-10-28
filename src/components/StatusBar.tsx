@@ -3,23 +3,30 @@ type StatusBarProps = {
   progress?: { current: number; total: number } | null;
 };
 
-const barWidth = 30;
-
 export function StatusBar({ message, progress }: StatusBarProps) {
   const percent = progress && progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : null;
 
   return (
-    <p className="status-line">
-      <b>Status:</b> {message}
+    <div className="status-line">
+      <div>
+        <b>Status:</b> {message}
+      </div>
       {percent !== null && progress && (
-        <>
-          {" "}
-          <span className="progress-ascii">
-            [{"#".repeat(Math.round((barWidth * percent) / 100)).padEnd(barWidth, "-")}] {percent}% ({progress.current}/
-            {progress.total})
+        <div className="progress-row">
+          <div
+            className="progress-track"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={progress.total}
+            aria-valuenow={progress.current}
+          >
+            <div className="progress-fill" style={{ width: `${percent}%` }} />
+          </div>
+          <span className="progress-label">
+            {percent}% ({progress.current}/{progress.total})
           </span>
-        </>
+        </div>
       )}
-    </p>
+    </div>
   );
 }

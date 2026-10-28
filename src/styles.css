@@ -173,10 +173,30 @@ button:disabled {
   color: #003366;
 }
 
-.progress-ascii {
-  font-family: "Courier New", monospace;
-  font-size: 12px;
-  letter-spacing: 0;
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.progress-track {
+  flex: 1;
+  height: 14px;
+  border: 2px inset #d4d0c8;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #003366;
+  transition: width 0.3s ease;
+}
+
+.progress-label {
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .cards-grid {
@@ -559,4 +579,34 @@ button:disabled {
   height: auto;
   border: 1px solid #999999;
   flex-shrink: 0;
+}
+
+/* QARI click-to-read: words whose box is found but not yet read get a faint outline on hover. */
+.ocr-word.needs-read:hover {
+  background: rgba(255, 196, 0, 0.3);
+}
+
+.word-with-harakat {
+  font-size: 28px;
+  line-height: 1.8;
+  margin: 0 0 6px;
+}
+
+.reader-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.export-bar,
+.run-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.run-controls {
+  margin-right: auto;
 }

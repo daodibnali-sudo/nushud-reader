@@ -26,6 +26,10 @@ export function normalizeArabicWord(text: string): string {
     .trim();
 }
 
+export function arabicLetterCount(text: string): number {
+  return text.match(/[\u0621-\u064A]/g)?.length ?? 0;
+}
+
 export function splitIntoLines(text: string): string[] {
   return text.split(/\r?\n/);
 }
@@ -143,6 +147,7 @@ export function buildDocumentFromOcrPages(ocrPages: OcrPageResult[]): {
         normalized: normalizeArabicWord(word.text),
         lineIndex: pageIndex,
         tokenIndex,
+        ...(word.needsRead ? { needsRead: true } : {}),
       };
       tokens.push(token);
       overlayWords.push({

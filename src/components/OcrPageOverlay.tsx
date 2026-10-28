@@ -21,11 +21,11 @@ export function OcrPageOverlay({ imageDataUrl, words, resolvedWords, selectedTok
     <div className="ocr-page">
       <img src={imageDataUrl} alt="" className="ocr-page-image" />
       {words.map((word) => {
-        if (!word.normalized) return null;
+        if (!word.normalized && !word.needsRead) return null;
 
         const isResolved = Boolean(resolvedWords[word.normalized]);
         const isSelected = word.id === selectedTokenId;
-        const className = ["ocr-word", isResolved ? "is-known" : "", isSelected ? "is-selected" : ""]
+        const className = ["ocr-word", isResolved ? "is-known" : "", isSelected ? "is-selected" : "", word.needsRead ? "needs-read" : ""]
           .filter(Boolean)
           .join(" ");
 
